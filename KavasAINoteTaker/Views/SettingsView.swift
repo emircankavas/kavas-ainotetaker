@@ -8,6 +8,8 @@ enum SettingsKey {
     static let llmModel = "llm.model"
     static let language = "asr.language"
     static let recordingsPath = "recordings.path"
+    static let chunkSeconds = "asr.chunkSeconds"
+    static let maxConcurrent = "asr.maxConcurrent"
 }
 
 /// Ayarlar ekranı: endpoint + model + API anahtarları buradan düzenlenir.
@@ -28,6 +30,8 @@ struct SettingsView: View {
     // Genel
     @AppStorage(SettingsKey.language) private var language = "auto"
     @AppStorage(SettingsKey.recordingsPath) private var recordingsPath = defaultRecordingsPath
+    @AppStorage(SettingsKey.chunkSeconds) private var chunkSeconds = 120.0
+    @AppStorage(SettingsKey.maxConcurrent) private var maxConcurrent = 4
 
     var body: some View {
         Form {
@@ -58,6 +62,8 @@ struct SettingsView: View {
                     Text("İngilizce").tag("en")
                 }
                 TextField("Kayıt klasörü", text: $recordingsPath)
+                TextField("ASR parça süresi (sn)", value: $chunkSeconds, format: .number)
+                Stepper("Eşzamanlı ASR isteği: \(maxConcurrent)", value: $maxConcurrent, in: 1...16)
             }
 
             Section {

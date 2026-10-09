@@ -22,12 +22,15 @@ final class AppState {
     var availableProcesses: [AudioProcess] = []
     var selectedProcess: AudioProcess?
     var captureSource: CaptureSource = .both
+    private(set) var lastFolder: URL?
 
     private let coordinator = CaptureCoordinator()
 
     var isBusy: Bool {
         phase == .recording || phase == .transcribing || phase == .summarizing
     }
+
+    var canTranscribe: Bool { lastFolder != nil && !isBusy }
 
     func refreshProcesses() {
         availableProcesses = AudioProcessList.running()
@@ -42,6 +45,7 @@ final class AppState {
             let folder = try coordinator.start(source: captureSource,
                                                 process: selectedProcess,
                                                 basePath: recordingsPath)
+            lastFolder = folder
             phase = .recording
             lastError = nil
             statusText = "Kaydediliyor → \(folder.lastPathComponent)"
@@ -55,6 +59,33 @@ final class AppState {
     func stopRecording() {
         coordinator.stop()
         phase = .idle
-        statusText = "Kayıt durduruldu. (Transkript ve özet: sonraki fazlarda.)"
+        statusText = "Kayıt durduruldu. Transkript çıkarmak için \"Transkript Çıkar\" düğmesine basın."
+    }
+
+    func transcribeLast() {
+        guard let folder = lastFolder, !isBusy else { return }
+        phase = .transcribing
+        lastError = nil
+        statusText = "Transkript çıkarılıyor… (miks + parçalama + ASR)"
+
+        Task {
+            do {
+                let client = OpenAICompatASRClient(baseURL: SettingsStore.asrBaseURL,
+                                                   apiKey: SettingsStore.asrAPIKey,
+                                                   model: SettingsStore.asrModel)
+                let transcript = try await TranscriptionPipeline.run(
+                    folder: folder,
+                    client: client,
+                    language: SettingsStore.language,
+                    chunkSeconds: SettingsStore.chunkSeconds,
+                    maxConcurrent: SettingsStore.maxConcurrent)
+                phase = .done
+                statusText = "Transkript hazır: \(transcript.segments.count) parça → transcript.txt"
+            } catch {
+                phase = .failed
+                lastError = error.localizedDescription
+                statusText = "Transkript çıkarılamadı."
+            }
+        }
     }
 }

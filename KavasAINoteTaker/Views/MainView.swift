@@ -1,6 +1,7 @@
+import AppKit
 import SwiftUI
 
-/// Ana pencere: uygulama seçimi, kaynak seçimi, kaydet/dur.
+/// Ana pencere: uygulama seçimi, kaynak seçimi, kaydet/dur, transkript çıkar.
 struct MainView: View {
     @Environment(AppState.self) private var appState
     @AppStorage(SettingsKey.asrBaseURL) private var asrBaseURL = ""
@@ -30,7 +31,7 @@ struct MainView: View {
                     .textSelection(.enabled)
             }
 
-            recordButtons
+            actionButtons
 
             Spacer()
             configHint
@@ -81,7 +82,7 @@ struct MainView: View {
         }
     }
 
-    private var recordButtons: some View {
+    private var actionButtons: some View {
         HStack(spacing: 12) {
             Button {
                 appState.startRecording(recordingsPath: recordingsPath)
@@ -98,6 +99,23 @@ struct MainView: View {
             }
             .controlSize(.large)
             .disabled(!appState.isBusy)
+
+            Button {
+                appState.transcribeLast()
+            } label: {
+                Label("Transkript Çıkar", systemImage: "text.bubble")
+            }
+            .controlSize(.large)
+            .disabled(!appState.canTranscribe)
+
+            if let folder = appState.lastFolder {
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([folder])
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .help("Kayıt klasörünü Finder'da aç")
+            }
         }
     }
 

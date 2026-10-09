@@ -9,6 +9,7 @@ enum CaptureError: LocalizedError {
     case ioProc(OSStatus)
     case deviceStart(OSStatus)
     case noMicrophone
+    case noAudioInput
     case formatConversion
     case microphoneDenied
 
@@ -30,6 +31,8 @@ enum CaptureError: LocalizedError {
             return "Ses cihazı başlatılamadı (kod \(status))."
         case .noMicrophone:
             return "Kullanılabilir mikrofon bulunamadı."
+        case .noAudioInput:
+            return "Kayıt klasöründe işlenecek ses dosyası (app.caf/mic.caf) bulunamadı."
         case .formatConversion:
             return "Ses formatı AVAudioFormat'a dönüştürülemedi."
         case .microphoneDenied:
