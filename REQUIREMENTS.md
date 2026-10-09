@@ -152,7 +152,8 @@ kavas-ainotetaker/
 - **Faz 2 — ASR hattı:** ✅ 16 kHz mono miks (AVAudioConverter) → VAD chunking → OpenAI-uyumlu
   transkript istemcisi (paralel) → `transcript.json` + `transcript.txt`.
 - **Faz 3 — Özetleme:** ✅ OpenAI-uyumlu LLM istemcisi + map-reduce → `summary.md` + arayüzde önizleme.
-- **Faz 4 — Ayar & UX:** "Test Et", toplantı listesi, detay görünümü, ilerleme/hatalar.
+- **Faz 4 — Ayar & UX:** ✅ Endpoint "Test Et" (model listesi), NavigationSplitView toplantı listesi +
+  detay (özet/transkript sekmeleri), meta.json, ilerleme/hata gösterimi.
 - **Faz 5 — Realtime (ops.)**, **Faz 6 — Diarization (ops.)**.
 
 ---
