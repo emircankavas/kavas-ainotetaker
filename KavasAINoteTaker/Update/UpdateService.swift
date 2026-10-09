@@ -63,14 +63,19 @@ enum UpdateService {
         let script = tmp.appendingPathComponent("apply.sh")
         let scriptBody = """
         #!/bin/bash
-        # Uygulama tamamen kapanana kadar bekle.
-        while kill -0 \(pid) 2>/dev/null; do sleep 0.3; done
-        rm -rf "\(oldAppPath).old" 2>/dev/null
-        mv "\(oldAppPath)" "\(oldAppPath).old" 2>/dev/null
-        cp -R "\(newApp.path)" "\(oldAppPath)"
+        LOG="$HOME/Library/Application Support/KavasAINoteTaker/logs/update.log"
+        exec >> "$LOG" 2>&1
+        echo "[$(date)] guncelleme betigi basladi, pid=\(pid) bekleniyor"
+        # Uygulama tamamen kapanana kadar bekle (en fazla 30 sn).
+        n=0
+        while kill -0 \(pid) 2>/dev/null; do sleep 0.3; n=$((n+1)); [ $n -gt 100 ] && break; done
+        echo "[$(date)] uygulama kapandi, degistiriliyor"
+        rm -rf "\(oldAppPath).old"
+        mv "\(oldAppPath)" "\(oldAppPath).old"
+        cp -R "\(newApp.path)" "\(oldAppPath)" && echo "[$(date)] kopyalandi" || echo "[$(date)] KOPYALAMA HATASI"
         xattr -dr com.apple.quarantine "\(oldAppPath)" 2>/dev/null
-        rm -rf "\(oldAppPath).old" 2>/dev/null
-        open "\(oldAppPath)"
+        rm -rf "\(oldAppPath).old"
+        open "\(oldAppPath)" && echo "[$(date)] acildi"
         rm -rf "\(tmp.path)"
         """
         try scriptBody.write(to: script, atomically: true, encoding: .utf8)
@@ -79,10 +84,11 @@ enum UpdateService {
         AppLog.info("Güncelleme uygulanıyor; uygulama kapanınca yeni sürüm başlatılacak")
         try runDetached("/bin/bash", [script.path])
 
-        // 6) Çık (AppKit üzerinden; NSApp global'ine bağımlı değil).
+        // 6) Çık. terminate() bazen engellenir; garantili olması için exit(0) ile zorla.
         await MainActor.run {
             NSApplication.shared.terminate(nil)
         }
+        exit(0)
     }
 
     private static func run(_ launchPath: String, _ args: [String]) throws {
