@@ -83,12 +83,12 @@ final class LiveTranscriber {
                     consumed = cutPoint
 
                     let text = try await client.transcribe(fileURL: sendURL, language: language)
-                    let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !cleaned.isEmpty {
+                    let cleaned = TranscriptCleaner.clean(text)
+                    if !cleaned.isEmpty, cleaned != self.lines.last {
                         self.lines.append(cleaned)
                         self.status = "dinleniyor… \(self.lines.count) satır"
                     } else {
-                        self.status = "sessiz parça (boş sonuç)"
+                        self.status = "sessiz/tekrar parça (atlandı)"
                     }
                 } catch {
                     self.status = "hata: \(error.localizedDescription.prefix(140))"

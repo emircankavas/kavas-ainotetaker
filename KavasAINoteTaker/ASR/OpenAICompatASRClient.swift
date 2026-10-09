@@ -39,10 +39,8 @@ struct OpenAICompatASRClient: ASRClient {
                 throw ASRError.http(http.statusCode, String(data: responseData, encoding: .utf8) ?? "")
             }
             let text = Self.extractText(from: responseData)
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw ASRError.emptyResult
-            }
-            return Self.stripLanguagePrefix(text)
+            // Tekrar/halüsinasyon temizliği; sonuç boşsa boş metin döneriz (hata değil).
+            return Self.stripLanguagePrefix(TranscriptCleaner.clean(text))
         }
     }
 

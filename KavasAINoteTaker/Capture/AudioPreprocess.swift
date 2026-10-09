@@ -107,6 +107,23 @@ enum AudioPreprocess {
         return out
     }
 
+    /// Bir WAV dosyasının sessiz olup olmadığını (RMS eşiği) söyler.
+    /// Sessiz parçaları ASR'a göndermeyerek halüsinasyon/tekrar üretimini engelleriz.
+    static func isSilent(url: URL, threshold: Float = 0.004) -> Bool {
+        guard let file = try? AVAudioFile(forReading: url) else { return true }
+        let total = Int(file.length)
+        guard total > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                            frameCapacity: AVAudioFrameCount(total)),
+              let samples = buffer.floatChannelData?[0] else { return true }
+        try? file.read(into: buffer)
+        let n = Int(buffer.frameLength)
+        guard n > 0 else { return true }
+        var sum: Float = 0
+        for i in 0..<n { sum += samples[i] * samples[i] }
+        return (sum / Float(n)).squareRoot() < threshold
+    }
+
     /// Bir WAV dosyasının `[startSample, endSample)` aralığını yeni bir WAV dosyasına yazar
     /// (canlı transkript). `endSample` nil ise dosya sonuna kadar alır.
     static func slice(fromURL: URL, startSample: Int, toURL: URL, endSample: Int? = nil) throws -> Int {

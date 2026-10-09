@@ -54,7 +54,13 @@ enum TranscriptionPipeline {
         guard !chunks.isEmpty else { throw ASRError.emptyResult }
         AppLog.info("Parçalama tamam: \(chunks.count) parça (hedef \(Int(chunkSeconds)) sn)")
 
-        let segments = try await transcribeAll(chunks: chunks,
+        // Sessiz parçaları ele: ASR modelleri sessizlikte halüsinasyon/tekrar üretebiliyor.
+        let speechChunks = chunks.filter { !AudioPreprocess.isSilent(url: $0.url) }
+        let skipped = chunks.count - speechChunks.count
+        if skipped > 0 { AppLog.info("\(skipped) sessiz parça atlandı") }
+        guard !speechChunks.isEmpty else { throw ASRError.emptyResult }
+
+        let segments = try await transcribeAll(chunks: speechChunks,
                                                client: client,
                                                language: language,
                                                maxConcurrent: max(1, maxConcurrent))
@@ -77,19 +83,30 @@ enum TranscriptionPipeline {
         try await withThrowingTaskGroup(of: (Int, String).self) { group in
             var next = 0
             let initial = min(maxConcurrent, chunks.count)
-            for i in 0..<initial {
-                group.addTask { (i, try await client.transcribe(fileURL: chunks[i].url, language: language)) }
-                next = initial
+            func addTask(_ i: Int) {
+                group.addTask {
+                    // Tek parça hatası tüm işi düşürmesin: hatayı loglayıp boş döneriz.
+                    do { return (i, try await client.transcribe(fileURL: chunks[i].url, language: language)) }
+                    catch {
+                        AppLog.error(error, "Parça transkripti başarısız (index \(i))")
+                        return (i, "")
+                    }
+                }
             }
+            for i in 0..<initial { addTask(i) }
+            next = initial
+
             while let (index, text) = try await group.next() {
-                results[index] = TranscriptSegment(index: index,
-                                                   start: chunks[index].start,
-                                                   end: chunks[index].end,
-                                                   text: text)
+                let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty {
+                    results[index] = TranscriptSegment(index: index,
+                                                       start: chunks[index].start,
+                                                       end: chunks[index].end,
+                                                       text: cleaned)
+                }
                 if next < chunks.count {
-                    let j = next
+                    addTask(next)
                     next += 1
-                    group.addTask { (j, try await client.transcribe(fileURL: chunks[j].url, language: language)) }
                 }
             }
         }
