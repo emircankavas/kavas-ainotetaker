@@ -1,5 +1,5 @@
+import AppKit
 import SwiftUI
-
 /// Uygulama günlüğünü gösteren pencere (hata ayıklama).
 struct LogView: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +11,10 @@ struct LogView: View {
                 Text("Uygulama Günlüğü").font(.headline)
                 Spacer()
                 Button("Yenile") { reload() }
+                Button("Kopyala") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(AppLog.tail(2000), forType: .string)
+                }
                 Button("Finder'da Göster") {
                     NSWorkspace.shared.activateFileViewerSelecting([AppLog.fileURL])
                 }
@@ -30,5 +34,5 @@ struct LogView: View {
         .onAppear { reload() }
     }
 
-    private func reload() { text = AppLog.tail(600) }
+    private func reload() { text = AppLog.tail(2000) }
 }
