@@ -14,7 +14,7 @@ struct MainView: View {
             header
             Divider()
 
-            captureControls(state: state)
+            captureControls(state: $state)
 
             Text(appState.statusText)
                 .font(.callout)
