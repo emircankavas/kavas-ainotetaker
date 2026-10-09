@@ -1,0 +1,42 @@
+name: KavasAINoteTaker
+options:
+  bundleIdPrefix: com.emircankavas
+  deploymentTarget:
+    macOS: "14.2"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+targets:
+  KavasAINoteTaker:
+    type: application
+    platform: macOS
+    sources:
+      - path: KavasAINoteTaker
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.emircankavas.KavasAINoteTaker
+        PRODUCT_NAME: KavasAINoteTaker
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: KavasAINoteTaker.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        COMBINE_HIDPI_IMAGES: YES
+
+schemes:
+  KavasAINoteTaker:
+    build:
+      targets:
+        KavasAINoteTaker: all
+    run:
+      config: Debug
+    archive:
+      config: Release

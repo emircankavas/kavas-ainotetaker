@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Xcode / build
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+
+# Swift Package Manager
+.swiftpm/
+
+# Secrets (asla commit edilmez; token'lar Keychain'de tutulur)
+.env
+*.env
