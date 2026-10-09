@@ -21,11 +21,13 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.asrBaseURL) private var asrBaseURL = "https://api.example.com/v1"
     @AppStorage(SettingsKey.asrModel) private var asrModel = "qwen3-asr"
     @State private var asrAPIKey = Keychain.get(KeychainKey.asrAPIKey) ?? ""
+    @State private var asrTest: String?
 
     // LLM
     @AppStorage(SettingsKey.llmBaseURL) private var llmBaseURL = "https://api.example.com/v1"
     @AppStorage(SettingsKey.llmModel) private var llmModel = "deepseek-v4.1-flash"
     @State private var llmAPIKey = Keychain.get(KeychainKey.llmAPIKey) ?? ""
+    @State private var llmTest: String?
 
     // Genel
     @AppStorage(SettingsKey.language) private var language = "auto"
@@ -42,6 +44,9 @@ struct SettingsView: View {
                     .onChange(of: asrAPIKey) { _, newValue in
                         Keychain.set(newValue, for: KeychainKey.asrAPIKey)
                     }
+                testRow(status: asrTest) {
+                    await runTest(base: asrBaseURL, key: asrAPIKey, assign: { asrTest = $0 })
+                }
                 Text("Aynı sağlayıcının farklı bir modelini de yazabilirsiniz (ör. Qwen/Qwen3-ASR-1.7B).")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -53,6 +58,9 @@ struct SettingsView: View {
                     .onChange(of: llmAPIKey) { _, newValue in
                         Keychain.set(newValue, for: KeychainKey.llmAPIKey)
                     }
+                testRow(status: llmTest) {
+                    await runTest(base: llmBaseURL, key: llmAPIKey, assign: { llmTest = $0 })
+                }
             }
 
             Section("Kayıt") {
@@ -73,6 +81,26 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func testRow(status: String?, action: @escaping () async -> Void) -> some View {
+        HStack {
+            Button("Test Et") {
+                Task { await action() }
+            }
+            if let status {
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(status.hasPrefix("Bağlantı OK") ? .green : .red)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private func runTest(base: String, key: String, assign: @escaping (String) -> Void) async {
+        assign("Test ediliyor…")
+        let result = await EndpointTester.test(baseURL: base, apiKey: key)
+        assign(result.message)
     }
 }
 

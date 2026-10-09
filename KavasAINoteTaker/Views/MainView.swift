@@ -1,7 +1,6 @@
-import AppKit
 import SwiftUI
 
-/// Ana pencere: uygulama seçimi, kaynak seçimi, kaydet/dur, transkript çıkar.
+/// Kayıt paneli: uygulama seçimi, kaynak seçimi, kaydet/dur, transkript/özet, ilerleme.
 struct MainView: View {
     @Environment(AppState.self) private var appState
     @AppStorage(SettingsKey.asrBaseURL) private var asrBaseURL = ""
@@ -12,10 +11,13 @@ struct MainView: View {
         @Bindable var state = appState
 
         VStack(spacing: 16) {
-            header
-            Divider()
-
             captureControls(state: $state)
+
+            if let progress = appState.progress {
+                ProgressView(value: progress)
+            } else if appState.isBusy {
+                ProgressView().progressViewStyle(.linear)
+            }
 
             Text(appState.statusText)
                 .font(.callout)
@@ -37,19 +39,9 @@ struct MainView: View {
                 summaryPreview(preview)
             }
 
-            Spacer()
             configHint
         }
-        .padding(24)
         .onAppear { appState.refreshProcesses() }
-    }
-
-    private var header: some View {
-        VStack(spacing: 4) {
-            Text("Kavas AI NoteTaker").font(.title.bold())
-            Text("Toplantı sesi → transkript → özet")
-                .font(.subheadline).foregroundStyle(.secondary)
-        }
     }
 
     private func captureControls(state: Bindable<AppState>) -> some View {
@@ -139,7 +131,7 @@ struct MainView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
         }
-        .frame(maxHeight: 180)
+        .frame(maxHeight: 160)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
     }
 
