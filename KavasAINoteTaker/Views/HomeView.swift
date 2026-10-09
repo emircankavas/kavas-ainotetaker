@@ -37,25 +37,35 @@ struct HomeView: View {
     }
 
     private var recordingState: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             HStack(spacing: 8) {
                 Circle().fill(Theme.record).frame(width: 9, height: 9)
                 Text("Kaydediliyor • \(appState.elapsedText)")
                     .font(.system(.body, design: .rounded).weight(.medium))
+                if appState.live.isListening {
+                    Text("• Dinleniyor…")
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Theme.accent)
+                }
             }
             .padding(.horizontal, 14).padding(.vertical, 7)
             .background(.quaternary.opacity(0.5), in: Capsule())
 
-            VStack(spacing: 8) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 34))
-                    .foregroundStyle(Theme.record)
-                Text("Dinleniyor…")
+            if !appState.live.lines.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(appState.live.lines.enumerated()), id: \.offset) { _, line in
+                            Text(line).textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(14)
+                }
+                .frame(maxWidth: Theme.contentMaxWidth, maxHeight: 240)
+                .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+            } else {
+                Text(appState.live.isListening ? "Dinleniyor… ilk satırlar birazdan görünecek." : "Kayıt alınıyor.")
                     .foregroundStyle(.secondary)
-                Text("Canlı transkript ve özet, kaydı bitirip işledikten sonra görünür.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
             }
         }
         .padding(.bottom, 60)

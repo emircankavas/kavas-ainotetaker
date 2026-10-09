@@ -58,6 +58,7 @@ final class AppState {
     private(set) var lastFolder: URL?
     private(set) var lastTranscript: Transcript?
     var lastSummaryPreview: String?
+    let live = LiveTranscriber()
 
     // Toplantı listesi
     var meetings: [Meeting] = []
@@ -111,6 +112,13 @@ final class AppState {
             section = .home
             statusText = "Kaydediliyor → \(folder.lastPathComponent)"
             startTimer()
+
+            if SettingsStore.liveTranscription, !SettingsStore.asrBaseURL.isEmpty {
+                let client = OpenAICompatASRClient(baseURL: SettingsStore.asrBaseURL,
+                                                   apiKey: SettingsStore.asrAPIKey,
+                                                   model: SettingsStore.asrModel)
+                live.start(folder: folder, client: client, language: SettingsStore.language)
+            }
         } catch {
             phase = .failed
             lastError = error.localizedDescription
@@ -120,6 +128,7 @@ final class AppState {
 
     func stopRecording() {
         coordinator.stop()
+        live.stop()
         stopTimer()
         phase = .idle
         refreshMeetings()

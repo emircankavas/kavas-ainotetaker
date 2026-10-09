@@ -25,4 +25,9 @@ enum SettingsStore {
         let value = UserDefaults.standard.integer(forKey: SettingsKey.maxConcurrent)
         return value > 0 ? value : 4
     }
+
+    /// Canlı (yaklaşık gerçek zamanlı) transkript açık mı? Varsayılan: kapalı.
+    static var liveTranscription: Bool {
+        UserDefaults.standard.object(forKey: SettingsKey.liveTranscription) as? Bool ?? false
+    }
 }
