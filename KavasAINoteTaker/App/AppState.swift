@@ -68,17 +68,24 @@ final class AppState {
         lastError = nil
         statusText = "Transkript çıkarılıyor… (miks + parçalama + ASR)"
 
+        // Ağır iş (dosya IO + parçalama + ağ) MainActor dışında çalışmalı ki arayüz donmasın.
+        let baseURL = SettingsStore.asrBaseURL
+        let apiKey = SettingsStore.asrAPIKey
+        let model = SettingsStore.asrModel
+        let language = SettingsStore.language
+        let chunkSeconds = SettingsStore.chunkSeconds
+        let maxConcurrent = SettingsStore.maxConcurrent
+
         Task {
             do {
-                let client = OpenAICompatASRClient(baseURL: SettingsStore.asrBaseURL,
-                                                   apiKey: SettingsStore.asrAPIKey,
-                                                   model: SettingsStore.asrModel)
-                let transcript = try await TranscriptionPipeline.run(
-                    folder: folder,
-                    client: client,
-                    language: SettingsStore.language,
-                    chunkSeconds: SettingsStore.chunkSeconds,
-                    maxConcurrent: SettingsStore.maxConcurrent)
+                let transcript = try await Task.detached(priority: .userInitiated) {
+                    let client = OpenAICompatASRClient(baseURL: baseURL, apiKey: apiKey, model: model)
+                    return try await TranscriptionPipeline.run(folder: folder,
+                                                               client: client,
+                                                               language: language,
+                                                               chunkSeconds: chunkSeconds,
+                                                               maxConcurrent: maxConcurrent)
+                }.value
                 phase = .done
                 statusText = "Transkript hazır: \(transcript.segments.count) parça → transcript.txt"
             } catch {
