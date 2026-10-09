@@ -33,6 +33,7 @@ final class LiveTranscriber {
         let appURL = folder.appendingPathComponent("app.caf")
         let micURL = folder.appendingPathComponent("mic.caf")
         let deltaURL = folder.appendingPathComponent("live_chunk.wav")
+        let sendURL = folder.appendingPathComponent("live_chunk_send.wav")
         let fm = FileManager.default
 
         task = Task { [weak self] in
@@ -46,18 +47,18 @@ final class LiveTranscriber {
                 guard appExists || micExists else { continue }
 
                 do {
-                    let converted = try Task.detached(priority: .utility) {
+                    let converted = try await Task.detached(priority: .utility) {
                         try AudioPreprocess.makeMixedWAV(appURL: appURL, micURL: micURL, outputURL: deltaURL)
                         return AudioFileInfo.frameCount(of: deltaURL)
                     }.value
 
                     guard converted - consumed >= minFrames else { continue }
-                    try Task.detached(priority: .utility) {
-                        _ = try AudioPreprocess.slice(fromURL: deltaURL, startSample: consumed, toURL: deltaURL)
+                    try await Task.detached(priority: .utility) {
+                        _ = try AudioPreprocess.slice(fromURL: deltaURL, startSample: consumed, toURL: sendURL)
                     }.value
                     consumed = converted
 
-                    let text = try await client.transcribe(fileURL: deltaURL, language: language)
+                    let text = try await client.transcribe(fileURL: sendURL, language: language)
                     let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !cleaned.isEmpty {
                         self.lines.append(cleaned)
