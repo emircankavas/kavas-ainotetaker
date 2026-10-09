@@ -19,31 +19,26 @@ enum TranscriptCleaner {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Tüm metin, aynı birimin arka arkaya tekrarıysa bir kez bırakır.
-    /// ör. "Merhaba dünya. Merhaba dünya. Merhaba dünya." → "Merhaba dünya."
+    /// Tüm metin, aynı birimin (yarım kalabilen) arka arkaya tekrarıysa bir kez bırakır.
+    /// ör. "Merhaba dünya. Merhaba dünya. Merhaba dünya. Merhaba dünya" (son yarım) → "Merhaba dünya."
+    /// Standart periyodiklik testi: chars[i] == chars[i-p] tüm i>=p için (tam bölünebilme şartı yok).
     private static func collapseWholeRepeats(_ text: String) -> String {
         let chars = Array(text)
         let n = chars.count
-        guard n >= 4 else { return text }
-        for period in 1...(n / 2) {
-            guard n % period == 0 else { continue }
-            let unit = Array(chars[0..<period])
-            var matches = true
-            var i = period
+        guard n >= 6, n <= 60_000 else { return text }
+        for p in 1...(n / 2) {
+            var periodic = true
+            var i = p
             while i < n {
-                for j in 0..<period where chars[i + j] != unit[j] {
-                    matches = false
-                    break
-                }
-                if !matches { break }
-                i += period
+                if chars[i] != chars[i - p] { periodic = false; break }
+                i += 1
             }
-            guard matches else { continue }
-            let repeats = n / period
-            let unitString = String(unit).trimmingCharacters(in: .whitespaces)
-            // Uzun birim (tam cümle) 2+ kez, çok kısa birim 4+ kez tekrarlanınca sadeleştir.
-            if (unit.count >= 12 && repeats >= 2) || (unit.count >= 4 && repeats >= 4) {
-                return unitString
+            guard periodic else { continue }
+            let repeats = n / p
+            let unit = String(chars[0..<p]).trimmingCharacters(in: .whitespaces)
+            // Uzun birim (cümle) 2+ kez, kısa birim 4+ kez tekrarlanınca sadeleştir.
+            if (p >= 8 && repeats >= 2) || (p >= 3 && repeats >= 4) {
+                return unit
             }
         }
         return text

@@ -215,8 +215,9 @@ struct SettingsView: View {
     }
 }
 
+/// Varsayılan kayıt klasörü: `~/Library/Application Support` altında (TCC izni sormaz).
 let defaultRecordingsPath: String = {
-    let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSHomeDirectory())
+    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
     return base.appendingPathComponent("KavasAINoteTaker/meetings").path
 }()

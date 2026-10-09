@@ -1,7 +1,8 @@
 import Foundation
 
 /// Basit, kalıcı dosya günlüğü. Kayıt/içe aktarma/transkript/özet ve ağ olaylarını
-/// `~/Documents/KavasAINoteTaker/logs/app.log` dosyasına yazar. Hata ayıklama içindir.
+/// `~/Library/Application Support/KavasAINoteTaker/logs/app.log` dosyasına yazar.
+/// (Application Support TCC korumalı değildir → klasör izni sorulmaz.)
 enum AppLog {
     private static let queue = DispatchQueue(label: "com.emircankavas.KavasAINoteTaker.log")
     private static let formatter: ISO8601DateFormatter = {
@@ -11,8 +12,8 @@ enum AppLog {
     }()
 
     static var directory: URL {
-        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory())
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
         return base.appendingPathComponent("KavasAINoteTaker/logs", isDirectory: true)
     }
 
