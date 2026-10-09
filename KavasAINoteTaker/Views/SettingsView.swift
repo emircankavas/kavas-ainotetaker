@@ -11,6 +11,7 @@ enum SettingsKey {
     static let chunkSeconds = "asr.chunkSeconds"
     static let maxConcurrent = "asr.maxConcurrent"
     static let liveTranscription = "asr.liveTranscription"
+    static let autoProcessOnStop = "app.autoProcessOnStop"
 }
 
 /// Ayarlar bölümü: sekmeli kartlar (muadil meetily düzeni).
@@ -50,6 +51,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.chunkSeconds) private var chunkSeconds = 120.0
     @AppStorage(SettingsKey.maxConcurrent) private var maxConcurrent = 4
     @AppStorage(SettingsKey.liveTranscription) private var liveTranscription = true
+    @AppStorage(SettingsKey.autoProcessOnStop) private var autoProcessOnStop = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -133,6 +135,7 @@ struct SettingsView: View {
                     TextField("ASR parça süresi (sn)", value: $chunkSeconds, format: .number)
                     Stepper("Eşzamanlı ASR isteği: \(maxConcurrent)", value: $maxConcurrent, in: 1...16)
                     Toggle("Canlı transkript (kayıt sırasında)", isOn: $liveTranscription)
+                    Toggle("Kayıt durunca transkript + özet üret", isOn: $autoProcessOnStop)
                 }
                 .formStyle(.columns)
             }

@@ -33,4 +33,12 @@ enum SettingsStore {
         }
         return true
     }
+
+    /// Kayıt durunca tam transkript + özet otomatik üretilsin mi? Varsayılan: açık.
+    static var autoProcessOnStop: Bool {
+        if let value = UserDefaults.standard.object(forKey: SettingsKey.autoProcessOnStop) as? Bool {
+            return value
+        }
+        return true
+    }
 }

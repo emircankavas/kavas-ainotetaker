@@ -91,6 +91,11 @@ final class LiveTranscriber {
         status = "başlatılamadı: \(reason)"
     }
 
+    /// Önizlemeyi temizle.
+    func clear() {
+        lines = []
+    }
+
     func stop() {
         task?.cancel()
         task = nil

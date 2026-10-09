@@ -66,6 +66,7 @@ final class AppState {
 
     private let coordinator = CaptureCoordinator()
     private var timerTask: Task<Void, Never>?
+    private var autoChainSummary = false
 
     var isBusy: Bool {
         phase == .recording || phase == .transcribing || phase == .summarizing
@@ -133,8 +134,17 @@ final class AppState {
     func stopRecording() {
         coordinator.stop()
         live.stop()
+        live.clear()
         stopTimer()
         phase = .idle
+
+        // Kayıt durunca: tam sesle transkript (+ özet) otomatik üret (ilk saniyeler dahil, kalıcı).
+        if SettingsStore.autoProcessOnStop, lastFolder != nil {
+            refreshMeetings()
+            autoChainSummary = true
+            transcribeLast()
+            return
+        }
         refreshMeetings()
         statusText = "Kayıt durduruldu. Transkript çıkarmak için \"Transkript Çıkar\" düğmesine basın."
     }
@@ -170,6 +180,10 @@ final class AppState {
                 phase = .done
                 refreshMeetings()
                 statusText = "Transkript hazır: \(transcript.segments.count) parça → transcript.txt"
+                if autoChainSummary {
+                    autoChainSummary = false
+                    summarizeLast()
+                }
             } catch {
                 phase = .failed
                 lastError = error.localizedDescription
