@@ -151,7 +151,7 @@ kavas-ainotetaker/
 - **Faz 1 — Ses yakalama:** uygulama listesi + seçim; CATap per-process kayıt + mikrofon; WAV; izin UX'i.
 - **Faz 2 — ASR hattı:** ✅ 16 kHz mono miks (AVAudioConverter) → VAD chunking → OpenAI-uyumlu
   transkript istemcisi (paralel) → `transcript.json` + `transcript.txt`.
-- **Faz 3 — Özetleme:** deepseek istemcisi + map-reduce → `summary.md`.
+- **Faz 3 — Özetleme:** ✅ OpenAI-uyumlu LLM istemcisi + map-reduce → `summary.md` + arayüzde önizleme.
 - **Faz 4 — Ayar & UX:** "Test Et", toplantı listesi, detay görünümü, ilerleme/hatalar.
 - **Faz 5 — Realtime (ops.)**, **Faz 6 — Diarization (ops.)**.
 
