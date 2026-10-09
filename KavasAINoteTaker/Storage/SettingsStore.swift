@@ -26,8 +26,11 @@ enum SettingsStore {
         return value > 0 ? value : 4
     }
 
-    /// Canlı (yaklaşık gerçek zamanlı) transkript açık mı? Varsayılan: kapalı.
+    /// Canlı (yaklaşık gerçek zamanlı) transkript açık mı? Varsayılan: açık.
     static var liveTranscription: Bool {
-        UserDefaults.standard.object(forKey: SettingsKey.liveTranscription) as? Bool ?? false
+        if let value = UserDefaults.standard.object(forKey: SettingsKey.liveTranscription) as? Bool {
+            return value
+        }
+        return true
     }
 }

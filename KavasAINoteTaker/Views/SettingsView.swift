@@ -49,7 +49,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.recordingsPath) private var recordingsPath = defaultRecordingsPath
     @AppStorage(SettingsKey.chunkSeconds) private var chunkSeconds = 120.0
     @AppStorage(SettingsKey.maxConcurrent) private var maxConcurrent = 4
-    @AppStorage(SettingsKey.liveTranscription) private var liveTranscription = false
+    @AppStorage(SettingsKey.liveTranscription) private var liveTranscription = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

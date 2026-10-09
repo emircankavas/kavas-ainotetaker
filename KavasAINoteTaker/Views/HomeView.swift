@@ -64,8 +64,14 @@ struct HomeView: View {
                 .frame(maxWidth: Theme.contentMaxWidth, maxHeight: 240)
                 .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
             } else {
-                Text(appState.live.isListening ? "Dinleniyor… ilk satırlar birazdan görünecek." : "Kayıt alınıyor.")
-                    .foregroundStyle(.secondary)
+                VStack(spacing: 6) {
+                    Text("Kayıt alınıyor.")
+                        .foregroundStyle(.secondary)
+                    Text("Canlı transkript: \(appState.live.status)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                }
             }
         }
         .padding(.bottom, 60)

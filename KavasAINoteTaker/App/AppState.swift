@@ -118,6 +118,10 @@ final class AppState {
                                                    apiKey: SettingsStore.asrAPIKey,
                                                    model: SettingsStore.asrModel)
                 live.start(folder: folder, client: client, language: SettingsStore.language)
+            } else if !SettingsStore.liveTranscription {
+                live.setDisabled("kapalı (Ayarlar → Genel → Canlı transkript)")
+            } else {
+                live.setDisabled("ASR endpoint ayarlı değil")
             }
         } catch {
             phase = .failed
