@@ -154,7 +154,8 @@ kavas-ainotetaker/
 - **Faz 3 — Özetleme:** ✅ OpenAI-uyumlu LLM istemcisi + map-reduce → `summary.md` + arayüzde önizleme.
 - **Faz 4 — Ayar & UX:** ✅ Endpoint "Test Et" (model listesi), NavigationSplitView toplantı listesi +
   detay (özet/transkript sekmeleri), meta.json, ilerleme/hata gösterimi.
-- **Faz 5 — Realtime (ops.)**, **Faz 6 — Diarization (ops.)**.
+- **Faz 5 — Realtime (ops.):** ✅ Kayıt sırasında "yaklaşık canlı" transkript (periyodik artımlı
+  ASR gönderimi) + ayardan aç/kapa. *(Gerçek streaming protokolü değil; batch uçla çalışır.)*
 
 ---
 
