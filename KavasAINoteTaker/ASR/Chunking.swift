@@ -71,12 +71,21 @@ enum Chunking {
         }
         cuts.append(totalFrames)
 
-        // Parçaları yaz.
+        // Parçaları yaz. Baş/son sessizliği kırp (modelin halüsinasyon/döngüye girmesini azaltır).
         var chunks: [Chunk] = []
         for i in 0..<(cuts.count - 1) {
-            let start = cuts[i]
+            var start = cuts[i]
             let end = cuts[i + 1]
             guard end > start else { continue }
+
+            // Baştan sessiz kısmı atla (en fazla 3 sn).
+            let maxTrim = Int(3 * sampleRate)
+            var trimmed = 0
+            while start + frameLen <= end, trimmed < maxTrim, isSilent(atFrames: start) {
+                start += frameLen
+                trimmed += frameLen
+            }
+            guard end - start > Int(0.3 * sampleRate) else { continue }
             let frames = end - start
             guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)),
                   let outData = out.floatChannelData?[0] else { continue }
