@@ -1,7 +1,9 @@
 import Foundation
 
-/// Kayıt klasörünü uçtan uca ASR'a çevirir: miksle → parçala → (paralel) transkript → kaydet.
+/// Kayıt klasörünü (app.caf + mic.caf) veya içe aktarılan bir dosyayı uçtan uca ASR'a çevirir:
+/// miks/ayıklama → VAD ile parçalama → (paralel) transkript → kaydet.
 enum TranscriptionPipeline {
+    /// Kayıt klasörü: app.caf + mic.caf → mixed.wav → parçala → transkript.
     static func run(folder: URL,
                     client: ASRClient,
                     language: String?,
@@ -10,9 +12,40 @@ enum TranscriptionPipeline {
         let appURL = folder.appendingPathComponent("app.caf")
         let micURL = folder.appendingPathComponent("mic.caf")
         let mixedURL = folder.appendingPathComponent("mixed.wav")
-
         try AudioPreprocess.makeMixedWAV(appURL: appURL, micURL: micURL, outputURL: mixedURL)
+        return try await transcribe(mixedURL: mixedURL,
+                                    folder: folder,
+                                    client: client,
+                                    language: language,
+                                    chunkSeconds: chunkSeconds,
+                                    maxConcurrent: maxConcurrent)
+    }
 
+    /// İçe aktarılan ses/video dosyası: sesi ayıkla → mixed.wav → parçala → transkript.
+    static func runImport(source: URL,
+                          folder: URL,
+                          client: ASRClient,
+                          language: String?,
+                          chunkSeconds: Double,
+                          maxConcurrent: Int) async throws -> Transcript {
+        let mixedURL = folder.appendingPathComponent("mixed.wav")
+        try await ImportService.extractAudio(from: source, toWAV: mixedURL)
+        return try await transcribe(mixedURL: mixedURL,
+                                    folder: folder,
+                                    client: client,
+                                    language: language,
+                                    chunkSeconds: chunkSeconds,
+                                    maxConcurrent: maxConcurrent)
+    }
+
+    // MARK: - Shared
+
+    private static func transcribe(mixedURL: URL,
+                                   folder: URL,
+                                   client: ASRClient,
+                                   language: String?,
+                                   chunkSeconds: Double,
+                                   maxConcurrent: Int) async throws -> Transcript {
         let chunksDir = folder.appendingPathComponent("chunks", isDirectory: true)
         try? FileManager.default.removeItem(at: chunksDir)
         try FileManager.default.createDirectory(at: chunksDir, withIntermediateDirectories: true)
@@ -30,11 +63,10 @@ enum TranscriptionPipeline {
                                     fullText: fullText,
                                     createdAt: Date())
         try TranscriptIO.save(transcript, to: folder)
-        try? FileManager.default.removeItem(at: chunksDir) // parça dosyalarını temizle
+        try? FileManager.default.removeItem(at: chunksDir)
         return transcript
     }
 
-    /// Parçaları sınırlı eşzamanlılıkla gönderir, sırayı korur.
     private static func transcribeAll(chunks: [Chunking.Chunk],
                                       client: ASRClient,
                                       language: String?,

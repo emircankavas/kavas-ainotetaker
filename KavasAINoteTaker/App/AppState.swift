@@ -242,6 +242,74 @@ final class AppState {
         }
     }
 
+    // MARK: - Import (ses/video)
+
+    /// Bir ses/video dosyasını içe aktarır: sesi ayıklar → transkript → özet.
+    func importFile(_ url: URL) {
+        guard !isBusy else { return }
+        let fm = FileManager.default
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            // Dosyayı çalışma alanına kopyala (güvenlik-kapsamlı erişim sonrası kalıcı olsun).
+            let folder = try MeetingFolder.create(at: SettingsStore.recordingsPath)
+            let ext = url.pathExtension.isEmpty ? "dat" : url.pathExtension
+            let stored = folder.appendingPathComponent("imported.\(ext)")
+            try? fm.removeItem(at: stored)
+            try fm.copyItem(at: url, to: stored)
+            lastFolder = folder
+            lastTranscript = nil
+            lastSummaryPreview = nil
+            MeetingStore.updateMeta(folder: folder) { meta in
+                meta.name = url.deletingPathExtension().lastPathComponent
+                meta.source = "İçe aktarıldı"
+                meta.appName = ext.uppercased()
+            }
+            section = .meetings
+            phase = .transcribing
+            lastError = nil
+            statusText = "İçe aktarılıyor: \(url.lastPathComponent) — ses ayıklanıyor…"
+
+            let baseURL = SettingsStore.asrBaseURL
+            let apiKey = SettingsStore.asrAPIKey
+            let model = SettingsStore.asrModel
+            let language = SettingsStore.language
+            let chunkSeconds = SettingsStore.chunkSeconds
+            let maxConcurrent = SettingsStore.maxConcurrent
+
+            Task {
+                do {
+                    let transcript = try await Task.detached(priority: .userInitiated) {
+                        let client = OpenAICompatASRClient(baseURL: baseURL, apiKey: apiKey, model: model)
+                        return try await TranscriptionPipeline.runImport(source: stored,
+                                                                         folder: folder,
+                                                                         client: client,
+                                                                         language: language,
+                                                                         chunkSeconds: chunkSeconds,
+                                                                         maxConcurrent: maxConcurrent)
+                    }.value
+                    lastTranscript = transcript
+                    MeetingStore.updateMeta(folder: folder) { $0.asrModel = model }
+                    refreshMeetings()
+                    if let updated = meetings.first(where: { $0.folder == folder }) {
+                        selectedMeeting = updated
+                    }
+                    phase = .done
+                    statusText = "İçe aktarma tamam: \(transcript.segments.count) parça. Özet çıkarabilirsiniz."
+                } catch {
+                    phase = .failed
+                    lastError = error.localizedDescription
+                    statusText = "İçe aktarma başarısız."
+                }
+            }
+        } catch {
+            phase = .failed
+            lastError = error.localizedDescription
+            statusText = "Dosya içe aktarılamadı."
+        }
+    }
+
     // MARK: - Timer
 
     private func startTimer() {

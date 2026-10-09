@@ -3,6 +3,7 @@ import SwiftUI
 /// Soldaki ince ikon şeridi: logo, gezinme, kırmızı kayıt düğmesi, ayarlar, hakkında.
 struct SidebarRail: View {
     @Environment(AppState.self) private var appState
+    var onImport: () -> Void
 
     var body: some View {
         VStack(spacing: 6) {
@@ -16,6 +17,7 @@ struct SidebarRail: View {
             navButton(.meetings)
 
             recordButton
+            importButton
 
             Spacer()
 
@@ -62,6 +64,21 @@ struct SidebarRail: View {
         .buttonStyle(.plain)
         .disabled(appState.isBusy && !appState.isRecording)
         .help(appState.isRecording ? "Kaydı durdur" : "Kaydı başlat")
-        .padding(.vertical, 4)
+    }
+
+    private var importButton: some View {
+        Button {
+            onImport()
+        } label: {
+            ZStack {
+                Circle().fill(Theme.accent).frame(width: 40, height: 40)
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(appState.isBusy)
+        .help("Ses/video içe aktar")
     }
 }
