@@ -1,0 +1,64 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (Release)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project KavasAINoteTaker.xcodeproj \
+            -scheme KavasAINoteTaker \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package .app
+        run: |
+          APP="build/Build/Products/Release/KavasAINoteTaker.app"
+          if [ ! -d "$APP" ]; then echo "App bundle not found at $APP"; exit 1; fi
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "KavasAINoteTaker-${GITHUB_REF_NAME}.zip"
+          ls -lh KavasAINoteTaker-*.zip
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: KavasAINoteTaker-*.zip
+          generate_release_notes: true
+          body: |
+            **Kavas AI NoteTaker — macOS toplantı not-alıcı**
+
+            Online toplantı sesini kaydeder, Qwen3-ASR (API) ile yazıya döker ve LLM ile özetler.
+
+            ### Kurulum
+            1. `KavasAINoteTaker-${{ github.ref_name }}.zip` indir ve aç.
+            2. Terminalde: `xattr -dr com.apple.quarantine KavasAINoteTaker.app` (imzasız build — Gatekeeper).
+            3. `KavasAINoteTaker.app`'i çalıştır. İlk kayıtta **Sistem Ses Kaydı** ve **Mikrofon** izni istenir.
+            4. **Ayarlar (⌘,)** → ASR endpoint/anahtar/model ve LLM endpoint/anahtar/model gir.
+
+            ### Özellikler
+            - Seçili uygulamanın sesi (Core Audio tap) + mikrofon kaydı
+            - Yaklaşık canlı transkript (VAD sessizlik sınırlı) + typewriter efekti
+            - Qwen3-ASR (OpenAI-uyumlu `/v1/audio/transcriptions`) ile transkript
+            - LLM (OpenAI-uyumlu `/v1/chat/completions`) ile Türkçe özet
+            - Ses/video içe aktarma (video'dan ses ayıklama)
+            - Toplantı listesi + transkript/özet görünümü
