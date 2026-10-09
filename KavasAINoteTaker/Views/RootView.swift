@@ -1,17 +1,21 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Uygulama kabuğu: solda ince ikon şeridi, sağda bölüm içeriği.
+/// Uygulama kabuğu: solda ince ikon şeridi, sağda bölüm içeriği, altta global durum çubuğu.
 struct RootView: View {
     @Environment(AppState.self) private var appState
     @State private var showImporter = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            SidebarRail(onImport: { showImporter = true })
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                SidebarRail(onImport: { showImporter = true })
+                Divider()
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             Divider()
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            StatusBar()
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 920, minHeight: 620)

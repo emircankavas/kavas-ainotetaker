@@ -11,6 +11,8 @@ struct HomeView: View {
                 Spacer()
                 if appState.isRecording {
                     recordingState
+                } else if appState.phase == .transcribing || appState.phase == .summarizing {
+                    busyState
                 } else {
                     welcome
                 }
@@ -22,6 +24,23 @@ struct HomeView: View {
                 .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var busyState: some View {
+        VStack(spacing: 14) {
+            ProgressView().controlSize(.large)
+            Text(appState.phase == .summarizing ? "Özet çıkarılıyor…" : "Transkript çıkarılıyor…")
+                .font(.title3.weight(.medium))
+            Text(appState.statusText)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+            if let err = appState.lastError {
+                Text(err).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center)
+            }
+        }
+        .padding(.bottom, 60)
     }
 
     private var welcome: some View {
