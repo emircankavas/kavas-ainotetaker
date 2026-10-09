@@ -47,8 +47,11 @@ enum HTTP {
                 return false
             }
         }
-        if case ASRError.http(let code, _) = error { return code >= 500 }
-        if case LLMError.http(let code, _) = error { return code >= 500 }
+        if case ASRError.http(let code, _) = error { return code >= 500 || code == 429 }
+        if case LLMError.http(let code, _) = error { return code >= 500 || code == 429 }
+        // Boş/eksik yanıt geçici olabilir (uç soğukken veya anlık) → yeniden dene.
+        if case LLMError.emptyResult = error { return true }
+        if case ASRError.emptyResult = error { return true }
         return false
     }
 }

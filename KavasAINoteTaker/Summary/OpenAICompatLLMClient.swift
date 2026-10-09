@@ -51,12 +51,20 @@ struct OpenAICompatLLMClient: LLMClient {
             guard (200..<300).contains(http.statusCode) else {
                 throw LLMError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
             }
+            AppLog.info("LLM ham yanıt (\(data.count) bayt): \(Self.snippet(data))")
             guard let content = Self.extractContent(from: data),
                   !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw LLMError.emptyResult
             }
             return content
         }
+    }
+
+    /// Log için ham yanıt özeti.
+    static func snippet(_ data: Data) -> String {
+        let text = String(data: data, encoding: .utf8) ?? "<binary>"
+        let flat = text.replacingOccurrences(of: "\n", with: " ")
+        return flat.count > 800 ? String(flat.prefix(800)) + "…" : flat
     }
 
     // MARK: - Helpers
@@ -75,9 +83,14 @@ struct OpenAICompatLLMClient: LLMClient {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
               let first = choices.first else { return nil }
-        if let message = first["message"] as? [String: Any],
-           let content = message["content"] as? String {
-            return content
+        if let message = first["message"] as? [String: Any] {
+            // Bazı OpenAI-uyumlu uçlar/reasoning modelleri metni farklı alanlarda döndürür.
+            for key in ["content", "reasoning_content", "reasoning", "text"] {
+                if let value = message[key] as? String,
+                   !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return value
+                }
+            }
         }
         if let text = first["text"] as? String { return text }
         return nil
