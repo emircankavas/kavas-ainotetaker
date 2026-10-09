@@ -112,6 +112,7 @@ final class AppState {
             lastError = nil
             section = .home
             statusText = "Kaydediliyor → \(folder.lastPathComponent)"
+            AppLog.info("Kayıt başladı: \(folder.lastPathComponent) | kaynak=\(captureSource.label) | uygulama=\(selectedProcess?.name ?? "-")")
             startTimer()
 
             if SettingsStore.liveTranscription, !SettingsStore.asrBaseURL.isEmpty {
@@ -128,6 +129,7 @@ final class AppState {
             phase = .failed
             lastError = error.localizedDescription
             statusText = "Kayıt başlatılamadı."
+            AppLog.error(error, "Kayıt başlatılamadı")
         }
     }
 
@@ -136,6 +138,7 @@ final class AppState {
         live.stop()
         live.clear()
         stopTimer()
+        AppLog.info("Kayıt durdu: \(recordingElapsed) sn")
         phase = .idle
 
         // Kayıt durunca: tam sesle transkript (+ özet) otomatik üret (ilk saniyeler dahil, kalıcı).
@@ -157,6 +160,7 @@ final class AppState {
         lastError = nil
         progress = nil
         statusText = "Transkript çıkarılıyor… (miks + parçalama + ASR)"
+        AppLog.info("Transkript başladı: \(folder.lastPathComponent) | model=\(SettingsStore.asrModel)")
 
         let baseURL = SettingsStore.asrBaseURL
         let apiKey = SettingsStore.asrAPIKey
@@ -180,6 +184,7 @@ final class AppState {
                 phase = .done
                 refreshMeetings()
                 statusText = "Transkript hazır: \(transcript.segments.count) parça → transcript.txt"
+                AppLog.info("Transkript OK: \(transcript.segments.count) parça, \(transcript.fullText.count) karakter")
                 if autoChainSummary {
                     autoChainSummary = false
                     summarizeLast()
@@ -188,6 +193,7 @@ final class AppState {
                 phase = .failed
                 lastError = error.localizedDescription
                 statusText = "Transkript çıkarılamadı."
+                AppLog.error(error, "Transkript başarısız")
             }
         }
     }
@@ -199,6 +205,7 @@ final class AppState {
         phase = .summarizing
         lastError = nil
         statusText = "Toplantı özeti çıkarılıyor… (LLM)"
+        AppLog.info("Özet başladı: \(folder.lastPathComponent) | model=\(SettingsStore.llmModel)")
 
         let baseURL = SettingsStore.llmBaseURL
         let apiKey = SettingsStore.llmAPIKey
@@ -215,10 +222,12 @@ final class AppState {
                 lastSummaryPreview = summary
                 refreshMeetings()
                 statusText = "Özet hazır → summary.md"
+                AppLog.info("Özet OK: \(summary.count) karakter")
             } catch {
                 phase = .failed
                 lastError = error.localizedDescription
                 statusText = "Özet çıkarılamadı."
+                AppLog.error(error, "Özet başarısız")
             }
         }
     }
@@ -270,6 +279,7 @@ final class AppState {
             phase = .transcribing
             lastError = nil
             statusText = "İçe aktarılıyor: \(url.lastPathComponent) — ses ayıklanıyor…"
+            AppLog.info("İçe aktarma: \(url.lastPathComponent) (\(ext))")
 
             let baseURL = SettingsStore.asrBaseURL
             let apiKey = SettingsStore.asrAPIKey
@@ -297,16 +307,19 @@ final class AppState {
                     }
                     phase = .done
                     statusText = "İçe aktarma tamam: \(transcript.segments.count) parça. Özet çıkarabilirsiniz."
+                    AppLog.info("İçe aktarma OK: \(transcript.segments.count) parça")
                 } catch {
                     phase = .failed
                     lastError = error.localizedDescription
                     statusText = "İçe aktarma başarısız."
+                    AppLog.error(error, "İçe aktarma başarısız")
                 }
             }
         } catch {
             phase = .failed
             lastError = error.localizedDescription
             statusText = "Dosya içe aktarılamadı."
+            AppLog.error(error, "Dosya kopyalanamadı")
         }
     }
 

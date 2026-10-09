@@ -19,6 +19,7 @@ enum ImportError: LocalizedError {
 /// Hem ses dosyalarını hem de video (mp4/mov/mkv…) dosyalarını destekler.
 enum ImportService {
     static func extractAudio(from source: URL, toWAV wavURL: URL) async throws {
+        AppLog.info("Ses ayıklanıyor: \(source.lastPathComponent)")
         let target = AudioPreprocess.targetFormat
 
         // 1) Doğrudan ses dosyası olarak okunabiliyorsa (wav/mp3/m4a/aac…)

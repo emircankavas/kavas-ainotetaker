@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import Observation
-
 /// Kayıt sürerken büyüyen ses dosyasından yeni kısımları, SESSİZLİK (VAD) sınırlarında
 /// keserek ASR ucuna gönderir. Cümleler ortadan bölünmez; gecikme azalır.
 /// (meetily'nin "1.5 sn sessizlik bekle" yaklaşımından uyarlanmıştır.)
@@ -93,6 +92,7 @@ final class LiveTranscriber {
                     }
                 } catch {
                     self.status = "hata: \(error.localizedDescription.prefix(140))"
+                    AppLog.error(error, "Canlı transkript parçası")
                 }
             }
         }

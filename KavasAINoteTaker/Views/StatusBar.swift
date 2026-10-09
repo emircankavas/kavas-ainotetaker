@@ -1,5 +1,5 @@
+import AppKit
 import SwiftUI
-
 /// Her bölümün altında görünen global durum çubuğu: işlem ilerlemesi, hatalar.
 /// Uygulamanın "çalışıyor mu, dondu mu?" sorusunu yanıtlar.
 struct StatusBar: View {
@@ -15,15 +15,18 @@ struct StatusBar: View {
                 .truncationMode(.middle)
 
             if let err = appState.lastError {
-                Text("•")
-                    .foregroundStyle(.tertiary)
-                Text(err)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Text("•").foregroundStyle(.tertiary)
+                Text(err).font(.caption).foregroundStyle(.red).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([AppLog.fileURL])
+            } label: {
+                Image(systemName: "doc.text.magnifyingglass")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Günlük dosyasını Finder'da göster")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 7)

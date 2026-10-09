@@ -22,7 +22,11 @@ enum HTTP {
                 return try await operation()
             } catch {
                 lastError = error
-                guard isTransient(error), attempt < attempts else { throw error }
+                guard isTransient(error), attempt < attempts else {
+                    AppLog.error(error, "İstek \(attempt)/\(attempts) başarısız (yeniden deneme yok)")
+                    throw error
+                }
+                AppLog.info("İstek \(attempt)/\(attempts) başarısız, \(Int(delay))s sonra yeniden denenecek: \(error.localizedDescription)")
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 delay *= 2
             }

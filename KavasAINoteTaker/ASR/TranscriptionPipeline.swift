@@ -52,6 +52,7 @@ enum TranscriptionPipeline {
 
         let chunks = try Chunking.split(wavURL: mixedURL, targetSeconds: chunkSeconds, outDir: chunksDir)
         guard !chunks.isEmpty else { throw ASRError.emptyResult }
+        AppLog.info("Parçalama tamam: \(chunks.count) parça (hedef \(Int(chunkSeconds)) sn)")
 
         let segments = try await transcribeAll(chunks: chunks,
                                                client: client,
