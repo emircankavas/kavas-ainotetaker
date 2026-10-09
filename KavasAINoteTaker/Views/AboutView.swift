@@ -8,7 +8,7 @@ struct AboutView: View {
                 .font(.system(size: 46))
                 .foregroundStyle(Theme.record)
             Text("Kavas AI NoteTaker").font(.title.bold())
-            Text("Sürüm 0.1.0").font(.callout).foregroundStyle(.secondary)
+            Text("Sürüm 0.1.1").font(.callout).foregroundStyle(.secondary)
             Text("Online toplantı sesini kaydeder, Qwen3-ASR ile yazıya döker ve LLM ile özetler.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
