@@ -1,204 +1,234 @@
 # kavas-ainotetaker — Gereksinim ve Teknik Harita
 
-Online toplantılarda sesi kaydeden, kaydı **Qwen3-ASR-1.7B** modeline API üzerinden
-vererek transkript çıkaran ve bu transkriptten **LLM ile toplantı özeti** üreten uygulama.
+Online toplantı sesini kaydeden, kaydı **Qwen3-ASR-1.7B** modeline API üzerinden vererek
+transkript çıkaran ve transkriptten **LLM ile toplantı özeti** üreten **macOS masaüstü uygulaması**.
 
-> Durum: **Taslak / onay bekliyor.** Onaydan sonra aşamalı olarak kodlanacak.
+> Durum: **Taslak / onay bekliyor.** Onaydan sonra fazlar hâlinde kodlanacak.
 
 ---
 
 ## 1. Hedef
 
-Katıldığımız online toplantılarda (Zoom / Google Meet / Teams / Discord vb.) konuşmayı
-kaydedip; konuşmacıya, kararlara ve aksiyonlara atıf yapabilen, paylaşılabilir bir
-**toplantı notu** (özet + transkript + aksiyon listesi) üretmek.
-
-Tipik akış:
+Zoom / Google Meet / Microsoft Teams / Discord gibi online toplantılarda konuşmayı
+kaydedip; kararlara ve aksiyonlara atıf yapabilen, paylaşılabilir bir **toplantı notu**
+(özet + transkript + aksiyon listesi) üretmek.
 
 ```
-[Toplantı] --ses--> [Kayıt] --ASR--> [Transkript] --LLM--> [Özet + Kararlar + Aksiyonlar]
+[Toplantı] --ses--> [kayıt] --ASR--> [transkript] --LLM--> [özet + kararlar + aksiyonlar]
 ```
 
 ---
 
-## 2. Ortam Kısıtları (mevcut makine)
+## 2. Hedef Platform ve Dil Kararı
 
-| Bileşen | Durum | Etki |
+**Platform:** macOS (Apple Silicon Mac — Mac16,1).
+**Dil:** **Swift + SwiftUI** (native).
+
+### Neden Swift?
+
+İşin en kritik parçası **sistem sesini yakalamak**. macOS'ta bunun doğru yolu Apple'ın
+kendi framework'üdür (**ScreenCaptureKit**). Bunlar Objective-C/Swift API'leri; Python'dan
+`pyobjc` ile kullanmak kırılgan (ScreenCaptureKit ses yakalama PyObjC'de bilinen hatalı
+durumda) ve `.app` paketleme / izinler (ekran kaydı, mikrofon) / imzalama Python'da sancılı.
+
+| İhtiyaç | Swift + SwiftUI | Python (pyobjc) |
 |---|---|---|
-| GPU | **AMD Radeon RX 6800 XT (16 GB)** — NVIDIA yok | Yerel vLLM/CUDA ile ASR çalıştırılamaz (Windows'ta ROCm yok) → **hosted API kullanılacak** |
-| CPU/RAM | — | ASR lokal CPU'da çok yavaş olur; API tercih edilir |
-| Python | 3.14.7 (global) | Proje için ayrı venv (3.12 önerilir) |
-| ffmpeg | Kurulu (n9.0.1) | Ses çözme/dönüştürme/kırpma için hazır |
-| OS | Windows 11 | Ses yakalama için WASAPI loopback |
-| Disk (D:) | 15 TB boş | Yeterli |
+| Sistem sesi (ScreenCaptureKit/Core Audio taps) | birinci sınıf | kırılgan köprü |
+| GUI + Settings scene | yerleşik | ayrı framework |
+| İzinler (ekran kaydı/mikrofon), entitlements | standart | elle uğraş |
+| `.app` dağıtımı, imzalama, notarization | standart | PyInstaller/py2app sancısı |
+| API çağrıları (URLSession) | birkaç satır | requests |
 
-**Sonuç:** ASR'yi hosted API üzerinden yapmak hem bu makine için doğru, hem de
-kullanıcının istediği "api üzerinden" yaklaşımına uygun.
+Alternatifler: Rust+Tauri (cross-platform ama macOS ses yakalama yine objc köprüsü),
+Electron (macOS-only işe göre gereksiz ağır). Native Swift seçildi.
 
 ---
 
-## 3. Ses Yakalama (Audio Capture)
+## 3. Ses Yakalama (Capture)
 
-Toplantı sesini iki olası kaynaktan alma:
+**Yöntem: ScreenCaptureKit** (macOS 13+). Yerleşik — ek kurulum yok.
+- Sistem sesi (karşı taraf) → **ScreenCaptureKit** `SCStream` audio output.
+- Kendi sesimiz → **AVAudioEngine** (mikrofon) — ayrı akış.
+- İki kaynağı **ayrı kanal** olarak kaydetmek (konuşmacı ayrımının doğal temeli), gerekirse
+  export'ta mikslemek.
 
-1. **Sistem sesi (WASAPI loopback)** — "Siz ne duyuyorsanız onu kaydet". Windows'ta
-   `PyAudioWPatch` ile hoparlör/kulaklık çıkışını kaydeder. Karşı tarafın sesini alır.
-2. **Mikrofon** — kendi sesimizi alır.
-3. **(Opsiyonel) Mikrofon + sistem sesi miks** — toplantı kayıtları için en doğrusu
-   (iki akışı ayrı kanal olarak kaydedip sonra mikslemek, konuşmacı ayrımının temeli).
-
-Kararlar:
-- Kayıt formatı: **WAV 16 kHz mono** (ASR standart giriş formatı) — kayıt sırasında
-  da mikslemek için iki kaynak ayrı WAV olarak tutulur, işleme öncesi ffmpeg ile miks.
-- Uzun toplantılar için **chunk'lama** (VAD ile sessizlikte bölme) — API süre limitini
-  aşmamak ve paralel işlemek için.
-- Kayıt sırasında cihaz seçimi ve seviye göstergesi (ileriki UI aşamasında).
+Notlar:
+- İlk çalıştırmada **Screen Recording** ve **Microphone** izni istenir (System Settings →
+  Privacy & Security). Uygulama izin durumunu kontrol edip yönlendirmeli.
+- SCStream sesi tüm sistem çıktısını içerir → toplantı dışı ses (bildirim, müzik) kayda
+  karışabilir. Azaltmak için: toplantı sırasında "sessize al" hatırlatması + ileride
+  Core Audio process taps ile sadece toplantı uygulamasına hedefleme (Faz 6).
+- Kayıt formatı: **CAF/WAV, 16 kHz mono** (ASR standart giriş) — ham kayıt 48 kHz tutulup
+  ASR öncesi dönüştürülür.
 
 ---
 
 ## 4. ASR Katmanı (Qwen3-ASR-1.7B, API)
 
-İki backend soyutlaması (`ASRBackend` arayüzü), aynı arayüzü konuşur:
+**Model:** Qwen3-ASR-1.7B (52+ dil, **Türkçe dahil**; konuşma + şarkı, offline/streaming).
 
-### 4a. `DashScopeBackend` (öncelikli — gateway'siz, doğrudan bulut)
-Alibaba Cloud Model Studio / DashScope API. Model: **`qwen3-asr-flash`** (Qwen3-ASR-1.7B
-tabanlı, 52+ dil, **Türkçe dahil**). İki biçim desteklenir:
-- **Senkron:** dosya/URL gönder, metni al.
-- **Realtime (WebSocket):** PCM stream gönder, canlı transkript al (isteğe bağlı, Faz 3).
+**İstemci:** `ASRClient` protokolü + tek somut uygulama:
+**OpenAI-uyumlu `/v1/audio/transcriptions`** istemcisi (`URLSession` multipart upload).
 
-SDK: `pip install dashscope`. Auth: `DASHSCOPE_API_KEY`.
-Not: 3 dk'lık süre limiti → VAD ile parçalama + paralel çağrı (Qwen3-ASR-Toolkit
-mantığı yeniden kullanılır).
-
-### 4b. `OpenAICompatBackend` (esnek — self-host veya proxy)
-OpenAI `/v1/audio/transcriptions` uyumlu **her** uç nokta (ör. başka makinede/GPU'da
-`qwen-asr-serve` ile ayağa kaldırılan Qwen3-ASR-1.7B, ya da Kalavai/Ollama tarzı proxy).
-Tek satır `base_url` değişikliğiyle seçilir. `openai` Python SDK'sı kullanılır.
-
-```python
-# Örnek: OpenAICompatBackend
-from openai import OpenAI
-client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key or "EMPTY")
-r = client.audio.transcriptions.create(model="qwen3-asr", file=open("meeting.wav","rb"))
-print(r.text)
+```swift
+protocol ASRClient {
+    func transcribe(fileURL: URL, language: String?) async throws -> Transcript
+}
+// OpenAICompatASRClient(baseURL, apiKey, model: "qwen3-asr")  // vLLM/qwen-asr-serve
 ```
 
-**Yerel 1.7B'yi çalıştırmak istenirse** (bu makinede değil): CUDA'lı bir NVIDIA makinede
-`qwen-asr-serve Qwen/Qwen3-ASR-1.7B --host 0.0.0.0 --port 8000`, ardından
-`OpenAICompatBackend(base_url="http://<host>:8000/v1")`.
+Neden OpenAI-uyumlu: Qwen3-ASR-1.7B'yi `qwen-asr-serve` veya `vllm serve` ile (NVIDIA GPU'lu
+herhangi bir sunucuda/sağlayıcıda) ayağa kaldırdığında aynı şekilde çalışır; **endpoint + token
+kullanıcının Settings'inden** gelir. (DashScope'un `qwen3-asr-flash` servisi ayrı/async bir
+API'dir; gerekirse Faz 4'te ayrı adapter eklenir.)
+
+**Uzun toplantı yönetimi:** API'lerde (özellikle bulut) süre limitleri var → kaydı **VAD ile
+sessizlikte parçala**, parçaları **paralel** gönder, metinleri sırayla birleştir
+(Qwen3-ASR-Toolkit mantığı). Self-host'ta limit esnek ama yine parçalamak güvenli.
+
+Çıktı: `transcript.json` — parça metinleri (+ varsa zaman damgaları, dil).
 
 ---
 
 ## 5. Özetleme Katmanı (LLM)
 
-Transkripti, yapılandırılmış bir toplantı notuna çevirir. Çıktı şablonu:
+Transkripti yapılandırılmış toplantı notuna çevirir. **OpenAI-uyumlu `/v1/chat/completions`**
+istemcisi (`URLSession`); **model / endpoint / token ayarlardan**.
+
+Çıktı şablonu (Türkçe):
 
 ```
 ## Toplantı Özeti
 - Kısa özet (2-4 cümle)
-- Katılımcılar (varsa / diarization sonrası)
+- Katılımcılar (varsa)
 
-## Gündem / Konuşulanlar
-- madde madde, transkriptteki zaman damgasına atıfla
+## Konuşulanlar
+- madde madde, transkript bölümüne atıfla
 
 ## Kararlar
 - ✅ ...
 
 ## Aksiyonlar
 | İş | Sorumlu | Vade | Atıf |
-|---|---|---|---|
 
 ## Açık Sorular / Riskler
-- ...
 ```
 
-- **Sağlayıcı-agnostik `LLMBackend`**: OpenAI uyumlu chat completions (deepseek, openai,
-  yerel vb.). Config'ten seçilir.
-- **Uzunluk yönetimi:** uzun transkript → parçalı özet (map-reduce) + dil (Türkçe) korunur.
-- **Atıf:** her madde transkriptin ilgili bölümüne referans verebilir (zaman damgası).
-- `grounded-citations` yaklaşımı benimsenir: uydurma yok, transkriptte olmayan bilgi eklenmez.
+- **Uzunluk yönetimi:** uzun transkript → parçalı özet (map-reduce).
+- **Atıf (grounding):** özet transkriptteki içeriğe dayanır; uydurma yok. Modelden her madde
+  için transkriptteki referansı da vermesi istenir.
 
 ---
 
-## 6. Mimari (paket yapısı)
+## 6. Ayarlar (Settings) — zorunlu
+
+SwiftUI **Settings** sahnesi. Uygulama ilk açılışta buradan yapılandırılır:
+
+| Ayar | Açıklama |
+|---|---|
+| **ASR endpoint** | OpenAI-uyumlu base_url (`http://host:8000/v1`) |
+| **ASR API token** | Bearer token — **Keychain'de** saklanır |
+| **ASR model adı** | ör. `qwen3-asr` / `Qwen/Qwen3-ASR-1.7B` |
+| **LLM endpoint** | OpenAI-uyumlu base_url |
+| **LLM API token** | Bearer token — **Keychain** |
+| **LLM model adı** | ör. `deepseek-chat` / `gpt-4o` |
+| **Dil** | ASR dil ipucu (auto / tr / en …) |
+| **Kayıt klasörü** | kayıtların ve çıktıların yeri |
+| **Kaynak** | sistem sesi / mikrofon / ikisi |
+
+Token alanları **güvenli (SecureField)**, Keychain'de saklanır; `.env`/plaintext yok.
+Bağlantı "Test Et" butonu (endpoint erişilebilirlik + model listesi kontrolü).
+
+---
+
+## 7. Mimari (Swift proje yapısı)
 
 ```
 kavas-ainotetaker/
-├─ pyproject.toml
-├─ README.md
-├─ REQUIREMENTS.md            # bu doküman
-├─ .env.example               # DASHSCOPE_API_KEY, LLM_API_KEY ...
-├─ src/kavas_ainotetaker/
-│  ├─ config.py               # pydantic-settings ile config + .env
-│  ├─ audio/
-│  │  ├─ capture.py           # WASAPI loopback + mic (PyAudioWPatch / sounddevice)
-│  │  ├─ devices.py           # cihaz listeleme/seçme
-│  │  └─ preprocess.py        # ffmpeg: resample 16k mono, miks, VAD ile chunk
-│  ├─ asr/
-│  │  ├─ base.py              # ASRBackend arayüzü
-│  │  ├─ dashscope_backend.py # qwen3-asr-flash
-│  │  └─ openai_backend.py    # OpenAI uyumlu (self-host/proxy)
-│  ├─ summarize/
-│  │  ├─ base.py              # LLMBackend arayüzü
-│  │  └─ llm.py               # map-reduce özet + şablon
-│  ├─ pipeline.py             # kayıt→ASR→özet orkestrasyon
-│  ├─ storage.py              # kayıt klasörü + sqlite metadata + çıktılar
-│  └─ cli.py                  # typer CLI (kaydet / işle / list)
-├─ tests/
+├─ project.yml                      # XcodeGen girdisi (.xcodeproj üretir)
+├─ KavasAINoteTaker.entitlements    # mic + network
+├─ Info.plist                       # izin açıklamaları (NSMicrophoneUsageDescription)
+├─ KavasAINoteTaker/
+│  ├─ App/
+│  │  ├─ KavasAINoteTakerApp.swift  # @main, WindowGroup + Settings scene
+│  │  └─ AppState.swift             # @Observable, akış durumu
+│  ├─ Capture/
+│  │  ├─ SystemAudioCapture.swift   # ScreenCaptureKit SCStream → PCM dosya
+│  │  ├─ MicrophoneCapture.swift    # AVAudioEngine → PCM dosya
+│  │  ├─ CaptureCoordinator.swift   # kaynağı seç, birlikte başlat/durdur
+│  │  └─ AudioFile.swift            # CAF/WAV yazma, 48k→16k dönüştürme
+│  ├─ ASR/
+│  │  ├─ ASRClient.swift            # protocol
+│  │  ├─ OpenAICompatASRClient.swift
+│  │  └─ Chunking.swift             # VAD ile parçalama + birleştirme
+│  ├─ Summary/
+│  │  ├─ LLMClient.swift            # protocol
+│  │  └─ OpenAICompatLLMClient.swift# map-reduce özet, şablon
+│  ├─ Storage/
+│  │  ├─ SettingsStore.swift        # AppStorage + Keychain (token)
+│  │  ├─ Keychain.swift
+│  │  └─ MeetingStore.swift         # kayıt klasörü + metadata
+│  ├─ Pipeline/
+│  │  └─ TranscriptionPipeline.swift# kayıt→ASR→özet orkestrasyon
+│  └─ Views/
+│     ├─ MainView.swift             # kaydet/dur, toplantı listesi
+│     ├─ MeetingDetailView.swift    # transkript + özet sekmeleri
+│     └─ SettingsView.swift         # §6
+├─ Tests/KavasAINoteTakerTests/
 └─ docs/ARCHITECTURE.md
 ```
 
-**Teknoloji seçimleri:** Python 3.12 · `typer` (CLI) · `pydantic-settings` (config) ·
-`dashscope` (ASR) · `openai` (LLM/uyumlu ASR) · `PyAudioWPatch` + `sounddevice` (capture) ·
-`ffmpeg` (preprocess) · `soundfile`/`numpy` (VAD) · `sqlite3` (metadata) ·
-`pytest` (test).
+**Araçlar:** XcodeGen (`project.yml` → `.xcodeproj`, tekrarlanabilir), Swift 6, SwiftUI,
+ScreenCaptureKit, AVFoundation, Swift Concurrency (async/await). Gizli veri: Keychain.
+Dağıtım: Xcode ile imzalı `.app` (ops. notarization).
 
 ---
 
-## 7. Veri / Dosya Düzeni
+## 8. Veri / Dosya Düzeni
 
 ```
-data/
-└─ meetings/
-   └─ 2026-10-09_14-30_topla/
-      ├─ mic.wav
-      ├─ system.wav
-      ├─ mixed.wav
-      ├─ transcript.json      # segmentler + zaman damgaları + dil
-      ├─ transcript.txt
-      ├─ summary.md           # nihai çıktı (paylaşılabilir)
-      └─ meta.json            # süre, model, maliyet/token, backend
-└─ app.db                     # toplantı listesi + durum
+~/Documents/KavasAINoteTaker/meetings/
+└─ 2026-10-09_14-30_Toplanti/
+   ├─ system.caf            # ham sistem sesi
+   ├─ mic.caf               # ham mikrofon (varsa)
+   ├─ mixed.wav             # 16 kHz mono, ASR'a giden
+   ├─ transcript.json       # parçalar + metin + dil
+   ├─ transcript.txt
+   ├─ summary.md            # nihai, paylaşılabilir çıktı
+   └─ meta.json             # süre, model, endpoint, tarih
 ```
 
 ---
 
-## 8. Fazlar (uygulama sırası)
+## 9. Fazlar (uygulama sırası)
 
-- **Faz 0 — İskelet:** repo, pyproject, config, CLI stub, README/REQUIREMENTS. *(bu adım)*
-- **Faz 1 — ASR hattı:** dosya → preprocess (ffmpeg) → `DashScopeBackend` → transkript.json.
-  Golden test: kısa bir Türkçe kayıt.
-- **Faz 2 — Özetleme:** transkript → LLM → summary.md (Türkçe, atıflı).
-- **Faz 3 — Kayıt:** WASAPI loopback + mic canlı kayıt + otomatik pipeline tetikleme.
-- **Faz 4 — CLI/UX:** `ainote record|process|list|show`, ilerleme çıktısı.
-- **Faz 5 — (ops.) UI & realtime:** masaüstü UI veya web panel; WebSocket realtime transkript.
-- **Faz 6 — (ops.) Diarization:** konuşmacı ayrımı (mikrofon/sistem kanal ayrımı ile doğal,
-  ya da bir embedding modeli).
-
----
-
-## 9. Karar Bekleyen Sorular
-
-1. **ASR sağlayıcısı:** DashScope `qwen3-asr-flash` (bulut, en kolay) mı, yoksa
-   **kendi GPU'lu sunucunda self-host Qwen3-ASR-1.7B** (OpenAI uyumlu uç) mı?
-2. **Ses kaynağı:** sadece sistem sesi mi, sadece mikrofon mu, yoksa **ikisi miks** mi?
-3. **Özet LLM sağlayıcısı:** hangi modeli kullanacaksın (OpenAI-uyumlu herhangi biri)?
-4. **Arayüz:** önce **CLI** mi, yoksa doğrudan **masaüstü/web UI** mı?
+- **Faz 0 — İskelet:** XcodeGen `project.yml`, app + Settings scaffolding, entitlements/Info.plist,
+  boş SwiftUI penceresi; `xcodebuild` ile derlenir. *(onaydan sonra)*
+- **Faz 1 — Ses yakalama:** ScreenCaptureKit sistem sesi + mikrofon kaydı, WAV yazma,
+  izin kontrolü, basit kaydet/dur UI.
+- **Faz 2 — ASR hattı:** OpenAI-uyumlu transkript istemcisi + chunking → `transcript.json`.
+  Golden test: kısa Türkçe kayıt.
+- **Faz 3 — Özetleme:** LLM istemcisi + map-reduce özet → `summary.md`.
+- **Faz 4 — Ayar & UX:** Settings (endpoint/token/model, Keychain, Test Et), toplantı listesi,
+  detay görünümü, ilerleme/hatalar.
+- **Faz 5 — Realtime (ops.):** WebSocket/streaming ile canlı transkript.
+- **Faz 6 — Diarization & hedefleme (ops.):** konuşmacı ayrımı (mic/sistem kanalı doğal ayrım),
+  Core Audio process taps ile sadece toplantı uygulamasını yakalama.
 
 ---
 
-## 10. Gizlilik / Uyarı
+## 10. Açık Sorular
 
-Toplantı kaydı ve transkript **kişisel veri** içerir (KVKK/GDPR). Bulut ASR kullanılırsa
-ses üçüncü tarafa gider. Kayıt öncesi katılımcı onayı ve veri saklama politikası
-netleştirilmeli. Bu madde tasarım kararlarını (self-host vs bulut) doğrudan etkiler.
+1. **ASR endpoint'i hangisi olacak?** (a) kendi NVIDIA sunucunda `qwen-asr-serve`/vLLM,
+   (b) bir sağlayıcının OpenAI-uyumlu ucu, (c) DashScope `qwen3-asr-flash` (ayrı adapter gerekir).
+2. **Ses kaynağı:** sistem sesi / mikrofon / ikisi (önerilen: ikisi).
+3. **Özet LLM'i:** hangi model/endpoint?
+4. **Dağıtım:** sadece kendi Mac'inde mi, yoksa imzalı/notarized dağıtım da olacak mı?
+
+---
+
+## 11. Gizlilik / Uyarı
+
+Toplantı kaydı ve transkript **kişisel veri** içerir (KVKK/GDPR). Ses bulut bir ASR'ye
+gidiyorsa üçüncü tarafa aktarılır. Kayıt öncesi katılımcı onayı ve saklama politikası
+netleştirilmeli. Bu, endpoint seçimini (self-host vs bulut) doğrudan etkiler.
