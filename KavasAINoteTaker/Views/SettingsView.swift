@@ -12,6 +12,7 @@ enum SettingsKey {
     static let maxConcurrent = "asr.maxConcurrent"
     static let liveTranscription = "asr.liveTranscription"
     static let autoProcessOnStop = "app.autoProcessOnStop"
+    static let checkUpdatesOnLaunch = "app.checkUpdatesOnLaunch"
 }
 
 /// Ayarlar bölümü: sekmeli kartlar (muadil meetily düzeni).
@@ -52,6 +53,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.maxConcurrent) private var maxConcurrent = 4
     @AppStorage(SettingsKey.liveTranscription) private var liveTranscription = true
     @AppStorage(SettingsKey.autoProcessOnStop) private var autoProcessOnStop = true
+    @AppStorage(SettingsKey.checkUpdatesOnLaunch) private var checkUpdatesOnLaunch = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -136,6 +138,7 @@ struct SettingsView: View {
                     Stepper("Eşzamanlı ASR isteği: \(maxConcurrent)", value: $maxConcurrent, in: 1...16)
                     Toggle("Canlı transkript (kayıt sırasında)", isOn: $liveTranscription)
                     Toggle("Kayıt durunca transkript + özet üret", isOn: $autoProcessOnStop)
+                    Toggle("Açılışta güncellemeleri kontrol et", isOn: $checkUpdatesOnLaunch)
                 }
                 .formStyle(.columns)
             }

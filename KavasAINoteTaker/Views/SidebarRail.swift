@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Soldaki ince ikon şeridi: logo, gezinme, kırmızı kayıt düğmesi, ayarlar, hakkında.
+/// Soldaki ince ikon şeridi: logo, gezinme, kayıt, içe aktar, ayarlar, hakkında.
+/// Hakkında düğmesinde güncelleme varsa kırmızı rozet gösterilir.
 struct SidebarRail: View {
     @Environment(AppState.self) private var appState
+    @Environment(UpdateState.self) private var update
     var onImport: () -> Void
 
     var body: some View {
@@ -41,6 +43,12 @@ struct SidebarRail: View {
                 .foregroundStyle(selected ? Theme.accent : Color.secondary)
                 .background(selected ? Theme.selection : .clear,
                             in: RoundedRectangle(cornerRadius: 9))
+                .overlay(alignment: .topTrailing) {
+                    if section == .about, update.available != nil {
+                        Circle().fill(Theme.record).frame(width: 8, height: 8)
+                            .offset(x: -4, y: 4)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .help(section.title)

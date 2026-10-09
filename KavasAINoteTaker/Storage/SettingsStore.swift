@@ -41,4 +41,12 @@ enum SettingsStore {
         }
         return true
     }
+
+    /// Açılışta güncelleme kontrol edilsin mi? Varsayılan: açık.
+    static var checkUpdatesOnLaunch: Bool {
+        if let value = UserDefaults.standard.object(forKey: SettingsKey.checkUpdatesOnLaunch) as? Bool {
+            return value
+        }
+        return true
+    }
 }
