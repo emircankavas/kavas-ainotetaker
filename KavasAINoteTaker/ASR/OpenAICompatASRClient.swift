@@ -40,8 +40,20 @@ struct OpenAICompatASRClient: ASRClient {
             }
             let text = Self.extractText(from: responseData)
             // Tekrar/halüsinasyon temizliği; sonuç boşsa boş metin döneriz (hata değil).
-            return Self.stripLanguagePrefix(TranscriptCleaner.clean(text))
+            let cleaned = Self.stripLanguagePrefix(TranscriptCleaner.clean(text))
+            let rawTag = fileURL.lastPathComponent
+            AppLog.info("ASR ham [\(rawTag)] (\(text.count) kr): \(Self.snippet(text))")
+            if cleaned != text {
+                AppLog.info("ASR temiz [\(rawTag)] (\(cleaned.count) kr): \(Self.snippet(cleaned))")
+            }
+            return cleaned
         }
+    }
+
+    /// Log için kısaltılmış metin.
+    static func snippet(_ text: String) -> String {
+        let flat = text.replacingOccurrences(of: "\n", with: " ⏎ ")
+        return flat.count > 600 ? String(flat.prefix(600)) + "…" : flat
     }
 
     // MARK: - Helpers

@@ -110,6 +110,25 @@ enum TranscriptionPipeline {
                 }
             }
         }
-        return results.compactMap { $0 }
+        return dedupeConsecutive(results.compactMap { $0 })
+    }
+
+    /// Ardışık (normalize edilmiş) aynı segmentleri tekrarlarını atar (parçalar arası tekrarı temizler).
+    private static func dedupeConsecutive(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
+        var output: [TranscriptSegment] = []
+        var previousKey = ""
+        for segment in segments {
+            let key = normalize(segment.text)
+            if key.isEmpty || key == previousKey { continue }
+            output.append(segment)
+            previousKey = key
+        }
+        return output
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text.lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 }
