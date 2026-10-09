@@ -107,14 +107,17 @@ enum AudioPreprocess {
         return out
     }
 
-    /// Bir WAV dosyasının `[startSample, ...]` aralığını yeni bir WAV dosyasına yazar (canlı transkript).
-    static func slice(fromURL: URL, startSample: Int, toURL: URL) throws -> Int {
+    /// Bir WAV dosyasının `[startSample, endSample)` aralığını yeni bir WAV dosyasına yazar
+    /// (canlı transkript). `endSample` nil ise dosya sonuna kadar alır.
+    static func slice(fromURL: URL, startSample: Int, toURL: URL, endSample: Int? = nil) throws -> Int {
         let file = try AVAudioFile(forReading: fromURL)
         let format = file.processingFormat
         let total = Int(file.length)
         guard startSample < total else { return 0 }
+        let end = min(endSample ?? total, total)
+        guard end > startSample else { return 0 }
         file.framePosition = AVAudioFramePosition(startSample)
-        let frames = total - startSample
+        let frames = end - startSample
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)) else {
             return 0
         }

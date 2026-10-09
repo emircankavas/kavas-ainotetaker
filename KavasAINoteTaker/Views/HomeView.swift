@@ -54,9 +54,16 @@ struct HomeView: View {
             if !appState.live.lines.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(appState.live.lines.enumerated()), id: \.offset) { _, line in
-                            Text(line).textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        ForEach(Array(appState.live.lines.enumerated()), id: \.offset) { index, line in
+                            if index == appState.live.lines.count - 1 {
+                                TypewriterText(text: line)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                Text(line)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                     }
                     .padding(14)
