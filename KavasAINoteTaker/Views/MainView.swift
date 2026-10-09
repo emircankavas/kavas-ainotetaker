@@ -33,6 +33,10 @@ struct MainView: View {
 
             actionButtons
 
+            if let preview = appState.lastSummaryPreview {
+                summaryPreview(preview)
+            }
+
             Spacer()
             configHint
         }
@@ -108,6 +112,14 @@ struct MainView: View {
             .controlSize(.large)
             .disabled(!appState.canTranscribe)
 
+            Button {
+                appState.summarizeLast()
+            } label: {
+                Label("Özet Çıkar", systemImage: "wand.and.stars")
+            }
+            .controlSize(.large)
+            .disabled(!appState.canSummarize)
+
             if let folder = appState.lastFolder {
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([folder])
@@ -117,6 +129,18 @@ struct MainView: View {
                 .help("Kayıt klasörünü Finder'da aç")
             }
         }
+    }
+
+    private func summaryPreview(_ text: String) -> some View {
+        ScrollView {
+            Text(text)
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+        }
+        .frame(maxHeight: 180)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var configHint: some View {

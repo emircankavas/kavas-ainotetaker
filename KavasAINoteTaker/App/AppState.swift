@@ -23,6 +23,8 @@ final class AppState {
     var selectedProcess: AudioProcess?
     var captureSource: CaptureSource = .both
     private(set) var lastFolder: URL?
+    private(set) var lastTranscript: Transcript?
+    var lastSummaryPreview: String?
 
     private let coordinator = CaptureCoordinator()
 
@@ -31,6 +33,7 @@ final class AppState {
     }
 
     var canTranscribe: Bool { lastFolder != nil && !isBusy }
+    var canSummarize: Bool { lastTranscript != nil && !isBusy }
 
     func refreshProcesses() {
         availableProcesses = AudioProcessList.running()
@@ -86,12 +89,40 @@ final class AppState {
                                                                chunkSeconds: chunkSeconds,
                                                                maxConcurrent: maxConcurrent)
                 }.value
+                lastTranscript = transcript
                 phase = .done
                 statusText = "Transkript hazır: \(transcript.segments.count) parça → transcript.txt"
             } catch {
                 phase = .failed
                 lastError = error.localizedDescription
                 statusText = "Transkript çıkarılamadı."
+            }
+        }
+    }
+
+    func summarizeLast() {
+        guard let folder = lastFolder, let transcript = lastTranscript, !isBusy else { return }
+        phase = .summarizing
+        lastError = nil
+        statusText = "Toplantı özeti çıkarılıyor… (LLM)"
+
+        let baseURL = SettingsStore.llmBaseURL
+        let apiKey = SettingsStore.llmAPIKey
+        let model = SettingsStore.llmModel
+
+        Task {
+            do {
+                let summary = try await Task.detached(priority: .userInitiated) {
+                    let client = OpenAICompatLLMClient(baseURL: baseURL, apiKey: apiKey, model: model)
+                    return try await Summarizer.run(folder: folder, transcript: transcript, client: client)
+                }.value
+                phase = .done
+                lastSummaryPreview = summary
+                statusText = "Özet hazır → summary.md"
+            } catch {
+                phase = .failed
+                lastError = error.localizedDescription
+                statusText = "Özet çıkarılamadı."
             }
         }
     }
