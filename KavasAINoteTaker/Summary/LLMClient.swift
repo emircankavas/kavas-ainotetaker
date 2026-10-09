@@ -11,6 +11,7 @@ enum LLMError: LocalizedError {
     case invalidResponse
     case http(Int, String)
     case emptyResult
+    case reasoningOnly
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +26,8 @@ enum LLMError: LocalizedError {
             return "Özet isteği başarısız (HTTP \(code))\(detail)"
         case .emptyResult:
             return "Özet modeli boş yanıt döndürdü."
+        case .reasoningOnly:
+            return "Model yalnızca düşünme (reasoning) metni döndürdü, nihai özet yok. Token bütçesini artırın veya reasoning olmayan bir model kullanın."
         }
     }
 }

@@ -52,8 +52,10 @@ struct OpenAICompatLLMClient: LLMClient {
                 throw LLMError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
             }
             AppLog.info("LLM ham yanıt (\(data.count) bayt): \(Self.snippet(data))")
-            guard let content = Self.extractContent(from: data),
-                  !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard let content = Self.extractContent(from: data) else {
+                if Self.hasOnlyReasoning(data) {
+                    throw LLMError.reasoningOnly
+                }
                 throw LLMError.emptyResult
             }
             return content
@@ -83,16 +85,27 @@ struct OpenAICompatLLMClient: LLMClient {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
               let first = choices.first else { return nil }
-        if let message = first["message"] as? [String: Any] {
-            // Bazı OpenAI-uyumlu uçlar/reasoning modelleri metni farklı alanlarda döndürür.
-            for key in ["content", "reasoning_content", "reasoning", "text"] {
-                if let value = message[key] as? String,
-                   !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return value
-                }
-            }
+        // YALNIZCA nihai cevap alanı. reasoning_content bir DÜŞÜNME metnidir, özet değil —
+        // onu asla cevap olarak kullanmayız.
+        if let message = first["message"] as? [String: Any],
+           let content = message["content"] as? String,
+           !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return content
         }
-        if let text = first["text"] as? String { return text }
+        if let text = first["text"] as? String,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return text
+        }
         return nil
+    }
+
+    /// Log için: düşünme metni var mı (reasoning-only yanıtı teşhis etmek için).
+    static func hasOnlyReasoning(_ data: Data) -> Bool {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = obj["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any] else { return false }
+        let content = (message["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let reasoning = (message["reasoning_content"] as? String) ?? ""
+        return content.isEmpty && !reasoning.isEmpty
     }
 }

@@ -5,7 +5,9 @@ import Foundation
 enum Summarizer {
     /// Karakter eşiği: bunun altındaki transkript tek seferde özetlenir.
     static let mapChunkChars = 12_000
-    static let maxOutputTokens = 2_000
+    /// Yüksek token bütçesi: reasoning modelleri düşünme için token harcar; düşük bütçede
+    /// nihai cevaba (content) yer kalmayabiliyor.
+    static let maxOutputTokens = 8_000
 
     static func run(folder: URL,
                     transcript: Transcript,
