@@ -2,6 +2,7 @@ import Foundation
 
 /// OpenAI-uyumlu `/v1/chat/completions` ucuna istek atan LLM istemcisi.
 /// DeepSeek / OpenAI / yerel uçlarla çalışır (model ve endpoint ayarlardan gelir).
+/// Uzun zaman aşımı + geçici hatalarda otomatik yeniden deneme içerir.
 struct OpenAICompatLLMClient: LLMClient {
     let baseURL: String
     let apiKey: String
@@ -21,13 +22,6 @@ struct OpenAICompatLLMClient: LLMClient {
         }
         let endpoint = try Self.endpoint(from: baseURL)
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        }
-
         let payload: [String: Any] = [
             "model": model,
             "messages": [
@@ -38,20 +32,31 @@ struct OpenAICompatLLMClient: LLMClient {
             "max_tokens": maxTokens,
             "stream": false,
         ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let body = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw LLMError.invalidResponse
+        return try await HTTP.retry {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 600
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if !apiKey.isEmpty {
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            }
+            request.httpBody = body
+
+            let (data, response) = try await HTTP.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw LLMError.invalidResponse
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                throw LLMError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+            }
+            guard let content = Self.extractContent(from: data),
+                  !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw LLMError.emptyResult
+            }
+            return content
         }
-        guard (200..<300).contains(http.statusCode) else {
-            throw LLMError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
-        }
-        guard let content = Self.extractContent(from: data),
-              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw LLMError.emptyResult
-        }
-        return content
     }
 
     // MARK: - Helpers
