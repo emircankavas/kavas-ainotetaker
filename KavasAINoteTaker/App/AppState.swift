@@ -5,6 +5,36 @@ import Observation
 @Observable
 @MainActor
 final class AppState {
+    /// Kenar çubuğu bölümleri.
+    enum Section: String, CaseIterable, Identifiable {
+        case home, meetings, settings, about
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .home: return "Ana Sayfa"
+            case .meetings: return "Toplantılar"
+            case .settings: return "Ayarlar"
+            case .about: return "Hakkında"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .home: return "house"
+            case .meetings: return "doc.text"
+            case .settings: return "gearshape"
+            case .about: return "info.circle"
+            }
+        }
+        var iconFilled: String {
+            switch self {
+            case .home: return "house.fill"
+            case .meetings: return "doc.text.fill"
+            case .settings: return "gearshape.fill"
+            case .about: return "info.circle.fill"
+            }
+        }
+    }
+
     enum Phase: String {
         case idle = "Hazır"
         case recording = "Kaydediliyor…"
@@ -14,8 +44,9 @@ final class AppState {
         case failed = "Hata"
     }
 
+    var section: Section = .home
     var phase: Phase = .idle
-    var statusText: String = "Ayarlardan endpoint ve API anahtarlarını girin, sonra bir uygulama seçin."
+    var statusText: String = "Kaydı başlatmak için mikrofon düğmesine basın."
     var lastError: String?
     var progress: Double?
 
@@ -23,6 +54,7 @@ final class AppState {
     var availableProcesses: [AudioProcess] = []
     var selectedProcess: AudioProcess?
     var captureSource: CaptureSource = .both
+    var recordingElapsed: Int = 0
     private(set) var lastFolder: URL?
     private(set) var lastTranscript: Transcript?
     var lastSummaryPreview: String?
@@ -32,13 +64,19 @@ final class AppState {
     var selectedMeeting: Meeting?
 
     private let coordinator = CaptureCoordinator()
+    private var timerTask: Task<Void, Never>?
 
     var isBusy: Bool {
         phase == .recording || phase == .transcribing || phase == .summarizing
     }
-
+    var isRecording: Bool { phase == .recording }
     var canTranscribe: Bool { lastFolder != nil && !isBusy }
     var canSummarize: Bool { lastTranscript != nil && !isBusy }
+
+    var elapsedText: String {
+        let total = recordingElapsed
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
 
     // MARK: - Processes
 
@@ -70,7 +108,9 @@ final class AppState {
             }
             phase = .recording
             lastError = nil
+            section = .home
             statusText = "Kaydediliyor → \(folder.lastPathComponent)"
+            startTimer()
         } catch {
             phase = .failed
             lastError = error.localizedDescription
@@ -80,6 +120,7 @@ final class AppState {
 
     func stopRecording() {
         coordinator.stop()
+        stopTimer()
         phase = .idle
         refreshMeetings()
         statusText = "Kayıt durduruldu. Transkript çıkarmak için \"Transkript Çıkar\" düğmesine basın."
@@ -167,11 +208,29 @@ final class AppState {
         lastFolder = meeting.folder
         if !meeting.hasTranscript {
             transcribeLast()
-        } else if !meeting.hasSummary {
-            if let transcript = MeetingStore.loadTranscript(folder: meeting.folder) {
-                lastTranscript = transcript
-                summarizeLast()
+        } else if !meeting.hasSummary,
+                  let transcript = MeetingStore.loadTranscript(folder: meeting.folder) {
+            lastTranscript = transcript
+            summarizeLast()
+        }
+    }
+
+    // MARK: - Timer
+
+    private func startTimer() {
+        recordingElapsed = 0
+        timerTask?.cancel()
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self, !Task.isCancelled else { break }
+                self.recordingElapsed += 1
             }
         }
+    }
+
+    private func stopTimer() {
+        timerTask?.cancel()
+        timerTask = nil
     }
 }

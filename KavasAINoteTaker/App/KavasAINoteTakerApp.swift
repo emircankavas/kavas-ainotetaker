@@ -6,16 +6,15 @@ struct KavasAINoteTakerApp: App {
 
     var body: some Scene {
         WindowGroup("Kavas AI NoteTaker") {
-            ContentView()
+            RootView()
                 .environment(appState)
-                .frame(minWidth: 900, minHeight: 600)
         }
         .windowResizability(.contentMinSize)
 
         Settings {
             SettingsView()
                 .environment(appState)
-                .frame(width: 540)
+                .frame(width: 640, height: 560)
         }
     }
 }
