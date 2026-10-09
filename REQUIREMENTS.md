@@ -9,91 +9,96 @@ transkript çıkaran ve transkriptten **LLM ile toplantı özeti** üreten **mac
 
 ## 1. Hedef
 
-Zoom / Google Meet / Microsoft Teams / Discord gibi online toplantılarda konuşmayı
-kaydedip; kararlara ve aksiyonlara atıf yapabilen, paylaşılabilir bir **toplantı notu**
-(özet + transkript + aksiyon listesi) üretmek.
+Zoom / Google Meet / Microsoft Teams / Discord gibi online toplantılarda **seçtiğin
+uygulamanın sesini** ve **mikrofonu** kaydedip; kararlara ve aksiyonlara atıf yapabilen,
+paylaşılabilir bir **toplantı notu** (özet + transkript + aksiyon listesi) üretmek.
 
 ```
-[Toplantı] --ses--> [kayıt] --ASR--> [transkript] --LLM--> [özet + kararlar + aksiyonlar]
+[Seçili uygulama sesi + mikrofon] --kayıt--> [ASR API] --transkript--> [LLM API] --> toplantı özeti
 ```
 
 ---
 
-## 2. Hedef Platform ve Dil Kararı
+## 2. Kararlar (onaylanmış)
 
-**Platform:** macOS (Apple Silicon Mac — Mac16,1).
-**Dil:** **Swift + SwiftUI** (native).
+| Konu | Karar |
+|---|---|
+| **Platform** | macOS (kendi Mac'i — Apple Silicon, Mac16,1). Şimdilik sadece orada çalışır. |
+| **Dil / UI** | **Swift 6 + SwiftUI** (native). |
+| **Ses kaynağı** | **Seçilen uygulamanın sesi** (per-process) **+ mikrofon**. |
+| **Ses yakalama tekniği** | **Core Audio process tap (`CATap`)** — macOS 14.2+, per-process. |
+| **ASR** | **Qwen3-ASR-1.7B**, sağlayıcının OpenAI-uyumlu ucu. |
+| **Özet LLM** | **deepseek-v4.1-flash**, endpoint + API key'i kullanıcı verir. |
+| **Endpoint & token** | Uygulamanın **Ayarlar** menüsünden girilir; token'lar Keychain'de. |
+| **Dağıtım** | Sadece kullanıcının Mac'i (imzalama/notarization gerekmez, local `.app`). |
 
-### Neden Swift?
-
-İşin en kritik parçası **sistem sesini yakalamak**. macOS'ta bunun doğru yolu Apple'ın
-kendi framework'üdür (**ScreenCaptureKit**). Bunlar Objective-C/Swift API'leri; Python'dan
-`pyobjc` ile kullanmak kırılgan (ScreenCaptureKit ses yakalama PyObjC'de bilinen hatalı
-durumda) ve `.app` paketleme / izinler (ekran kaydı, mikrofon) / imzalama Python'da sancılı.
-
-| İhtiyaç | Swift + SwiftUI | Python (pyobjc) |
-|---|---|---|
-| Sistem sesi (ScreenCaptureKit/Core Audio taps) | birinci sınıf | kırılgan köprü |
-| GUI + Settings scene | yerleşik | ayrı framework |
-| İzinler (ekran kaydı/mikrofon), entitlements | standart | elle uğraş |
-| `.app` dağıtımı, imzalama, notarization | standart | PyInstaller/py2app sancısı |
-| API çağrıları (URLSession) | birkaç satır | requests |
-
-Alternatifler: Rust+Tauri (cross-platform ama macOS ses yakalama yine objc köprüsü),
-Electron (macOS-only işe göre gereksiz ağır). Native Swift seçildi.
+> **Not (dil seçimi):** İşin en kritik parçası per-process sistem sesi yakalamadır ve
+> macOS'ta bunun doğru yolu Apple'ın Core Audio / ScreenCaptureKit framework'leridir
+> (Obj-C/Swift). Python'da `pyobjc` ile kırılgan, izinler ve `.app` paketleme sancılıdır.
+> Bu yüzden native **Swift** seçildi.
 
 ---
 
 ## 3. Ses Yakalama (Capture)
 
-**Yöntem: ScreenCaptureKit** (macOS 13+). Yerleşik — ek kurulum yok.
-- Sistem sesi (karşı taraf) → **ScreenCaptureKit** `SCStream` audio output.
-- Kendi sesimiz → **AVAudioEngine** (mikrofon) — ayrı akış.
-- İki kaynağı **ayrı kanal** olarak kaydetmek (konuşmacı ayrımının doğal temeli), gerekirse
-  export'ta mikslemek.
+**Yöntem: Core Audio process tap (`CATapDescription` + `AudioHardwareCreateProcessTap` +
+aggregate device).** macOS 14.2+.
 
-Notlar:
-- İlk çalıştırmada **Screen Recording** ve **Microphone** izni istenir (System Settings →
-  Privacy & Security). Uygulama izin durumunu kontrol edip yönlendirmeli.
-- SCStream sesi tüm sistem çıktısını içerir → toplantı dışı ses (bildirim, müzik) kayda
-  karışabilir. Azaltmak için: toplantı sırasında "sessize al" hatırlatması + ileride
-  Core Audio process taps ile sadece toplantı uygulamasına hedefleme (Faz 6).
-- Kayıt formatı: **CAF/WAV, 16 kHz mono** (ASR standart giriş) — ham kayıt 48 kHz tutulup
-  ASR öncesi dönüştürülür.
+- **Seçilen uygulama sesi:** Kullanıcı çalışan bir uygulamayı (ör. Zoom) seçer →
+  PID, `kAudioHardwarePropertyTranslatePIDToProcessObject` ile `AudioObjectID`'ye çevrilir →
+  o process için tap oluşturulur → private aggregate device üzerinden IO proc ile PCM alınır.
+- **Mikrofon:** `AVAudioEngine` girişi → ayrı akış.
+- İki kaynak **ayrı kanal** olarak kaydedilir (konuşmacı ayrımının doğal temeli: uygulama sesi
+  = karşı taraf, mikrofon = sen). ASR öncesi istenirse mikslenir.
+
+### İzinler
+- **`NSAudioCaptureUsageDescription`** Info.plist'te gerekir. İlk kayıtta sistem
+  "System Audio Recording Only" izni ister (macOS 14.2+).
+- **Not:** Bu, **Screen Recording izninden ayrı** ve daha hafif bir TCC servisidir
+  (`kTCCServiceAudioCapture`). Screen Recording izni *gerektirmez*.
+- Public API'de "ses kaydı izni var mı?" diye sorgulayan bir fonksiyon yok → tap
+  oluşturmayı deneyip hata üzerinden izin UX'ine yönlendirme yapılır.
+- Mikrofon için **`NSMicrophoneUsageDescription`**.
+
+### Teknik notlar
+- Aggregate device **yalnızca tap içermeli** (fiziksel çıkış subdevice'ı eklenmez) — çıkış
+  cihazı değişince (kulaklık/AirPods) tap kendi hızında akmaya devam eder.
+  `kAudioSubTapDriftCompensationKey: true`.
+- IO proc realtime thread'de çalışır → allocation/lock/`Task{}` yasak; yazma diske ya da
+  ring buffer'a kuyruklanmalı.
+- Kayıt formatı: ham **CAF/WAV 48 kHz**; ASR öncesi **16 kHz mono**'ya dönüştürülür.
+- **ScreenCaptureKit alternatifi:** uygulama seçmek için `SCContentFilter` de kullanılabilir
+  ama ekran kaydı izni + görüntü oturumu gerektirdiğinden CATap tercih edildi.
 
 ---
 
 ## 4. ASR Katmanı (Qwen3-ASR-1.7B, API)
 
-**Model:** Qwen3-ASR-1.7B (52+ dil, **Türkçe dahil**; konuşma + şarkı, offline/streaming).
-
-**İstemci:** `ASRClient` protokolü + tek somut uygulama:
-**OpenAI-uyumlu `/v1/audio/transcriptions`** istemcisi (`URLSession` multipart upload).
+**Model:** Qwen3-ASR-1.7B (52+ dil, **Türkçe dahil**).
+**İstemci:** `ASRClient` protokolü + `OpenAICompatASRClient` — OpenAI-uyumlu
+**`/v1/audio/transcriptions`** (multipart, `URLSession`).
 
 ```swift
 protocol ASRClient {
     func transcribe(fileURL: URL, language: String?) async throws -> Transcript
 }
-// OpenAICompatASRClient(baseURL, apiKey, model: "qwen3-asr")  // vLLM/qwen-asr-serve
+// OpenAICompatASRClient(baseURL, apiKey, model)  // baseURL+key Settings'ten
 ```
 
-Neden OpenAI-uyumlu: Qwen3-ASR-1.7B'yi `qwen-asr-serve` veya `vllm serve` ile (NVIDIA GPU'lu
-herhangi bir sunucuda/sağlayıcıda) ayağa kaldırdığında aynı şekilde çalışır; **endpoint + token
-kullanıcının Settings'inden** gelir. (DashScope'un `qwen3-asr-flash` servisi ayrı/async bir
-API'dir; gerekirse Faz 4'te ayrı adapter eklenir.)
-
-**Uzun toplantı yönetimi:** API'lerde (özellikle bulut) süre limitleri var → kaydı **VAD ile
-sessizlikte parçala**, parçaları **paralel** gönder, metinleri sırayla birleştir
-(Qwen3-ASR-Toolkit mantığı). Self-host'ta limit esnek ama yine parçalamak güvenli.
-
-Çıktı: `transcript.json` — parça metinleri (+ varsa zaman damgaları, dil).
+- **Endpoint, API key, model adı** Ayarlar'dan gelir (sağlayıcının ucu).
+- Dönen metindeki Qwen3-ASR'ın eklediği `language X\n` ön ekini sunucu/adapter temizler;
+  gerekirse istemci tarafında da temizlenir.
+- **Uzun toplantı yönetimi:** kaydı **VAD ile sessizlikte parçala**, parçaları **paralel**
+  gönder, metinleri sırayla birleştir (Qwen3-ASR-Toolkit mantığı).
+- Çıktı: `transcript.json` — parça metinleri (+ varsa zaman damgaları, dil).
 
 ---
 
 ## 5. Özetleme Katmanı (LLM)
 
-Transkripti yapılandırılmış toplantı notuna çevirir. **OpenAI-uyumlu `/v1/chat/completions`**
-istemcisi (`URLSession`); **model / endpoint / token ayarlardan**.
+**Model:** **deepseek-v4.1-flash** (endpoint + key kullanıcıdan).
+**İstemci:** `LLMClient` protokolü + `OpenAICompatLLMClient` — OpenAI-uyumlu
+**`/v1/chat/completions`** (`URLSession`).
 
 Çıktı şablonu (Türkçe):
 
@@ -115,29 +120,29 @@ istemcisi (`URLSession`); **model / endpoint / token ayarlardan**.
 ```
 
 - **Uzunluk yönetimi:** uzun transkript → parçalı özet (map-reduce).
-- **Atıf (grounding):** özet transkriptteki içeriğe dayanır; uydurma yok. Modelden her madde
-  için transkriptteki referansı da vermesi istenir.
+- **Atıf (grounding):** özet transkriptteki içeriğe dayanır; uydurma yok.
 
 ---
 
 ## 6. Ayarlar (Settings) — zorunlu
 
-SwiftUI **Settings** sahnesi. Uygulama ilk açılışta buradan yapılandırılır:
+SwiftUI **Settings** sahnesi. İlk açılışta yapılandırılır:
 
 | Ayar | Açıklama |
 |---|---|
-| **ASR endpoint** | OpenAI-uyumlu base_url (`http://host:8000/v1`) |
-| **ASR API token** | Bearer token — **Keychain'de** saklanır |
+| **ASR endpoint** | OpenAI-uyumlu base_url |
+| **ASR API token** | Bearer token — **Keychain** |
 | **ASR model adı** | ör. `qwen3-asr` / `Qwen/Qwen3-ASR-1.7B` |
 | **LLM endpoint** | OpenAI-uyumlu base_url |
 | **LLM API token** | Bearer token — **Keychain** |
-| **LLM model adı** | ör. `deepseek-chat` / `gpt-4o` |
+| **LLM model adı** | `deepseek-v4.1-flash` (varsayılan) |
 | **Dil** | ASR dil ipucu (auto / tr / en …) |
 | **Kayıt klasörü** | kayıtların ve çıktıların yeri |
-| **Kaynak** | sistem sesi / mikrofon / ikisi |
+| **Ses kaynağı** | seçili uygulama / mikrofon / ikisi |
+| **Varsayılan uygulama** | kayıt başlarken önerilecek uygulama (ör. Zoom) |
 
-Token alanları **güvenli (SecureField)**, Keychain'de saklanır; `.env`/plaintext yok.
-Bağlantı "Test Et" butonu (endpoint erişilebilirlik + model listesi kontrolü).
+Token alanları **SecureField** + **Keychain**; `.env`/plaintext yok. "Test Et" butonu
+(endpoint erişilebilirlik + model listesi).
 
 ---
 
@@ -145,42 +150,42 @@ Bağlantı "Test Et" butonu (endpoint erişilebilirlik + model listesi kontrolü
 
 ```
 kavas-ainotetaker/
-├─ project.yml                      # XcodeGen girdisi (.xcodeproj üretir)
-├─ KavasAINoteTaker.entitlements    # mic + network
-├─ Info.plist                       # izin açıklamaları (NSMicrophoneUsageDescription)
+├─ project.yml                      # XcodeGen → .xcodeproj
+├─ KavasAINoteTaker.entitlements    # mic + network; audio-capture (gerekirse)
+├─ Info.plist                       # NSAudioCaptureUsageDescription, NSMicrophoneUsageDescription
 ├─ KavasAINoteTaker/
 │  ├─ App/
 │  │  ├─ KavasAINoteTakerApp.swift  # @main, WindowGroup + Settings scene
 │  │  └─ AppState.swift             # @Observable, akış durumu
 │  ├─ Capture/
-│  │  ├─ SystemAudioCapture.swift   # ScreenCaptureKit SCStream → PCM dosya
-│  │  ├─ MicrophoneCapture.swift    # AVAudioEngine → PCM dosya
+│  │  ├─ AudioProcessList.swift     # çalışan sesli uygulamaları listele (pid→AudioObjectID)
+│  │  ├─ ProcessTapCapture.swift    # CATap + aggregate device → PCM
+│  │  ├─ MicrophoneCapture.swift    # AVAudioEngine → PCM
 │  │  ├─ CaptureCoordinator.swift   # kaynağı seç, birlikte başlat/durdur
-│  │  └─ AudioFile.swift            # CAF/WAV yazma, 48k→16k dönüştürme
+│  │  └─ AudioFile.swift            # CAF/WAV yazma, 48k→16k dönüşüm
 │  ├─ ASR/
 │  │  ├─ ASRClient.swift            # protocol
 │  │  ├─ OpenAICompatASRClient.swift
 │  │  └─ Chunking.swift             # VAD ile parçalama + birleştirme
 │  ├─ Summary/
 │  │  ├─ LLMClient.swift            # protocol
-│  │  └─ OpenAICompatLLMClient.swift# map-reduce özet, şablon
+│  │  └─ OpenAICompatLLMClient.swift# map-reduce özet + şablon
 │  ├─ Storage/
-│  │  ├─ SettingsStore.swift        # AppStorage + Keychain (token)
+│  │  ├─ SettingsStore.swift        # AppStorage + Keychain
 │  │  ├─ Keychain.swift
 │  │  └─ MeetingStore.swift         # kayıt klasörü + metadata
 │  ├─ Pipeline/
 │  │  └─ TranscriptionPipeline.swift# kayıt→ASR→özet orkestrasyon
 │  └─ Views/
-│     ├─ MainView.swift             # kaydet/dur, toplantı listesi
+│     ├─ MainView.swift             # uygulama seç, kaydet/dur, toplantı listesi
 │     ├─ MeetingDetailView.swift    # transkript + özet sekmeleri
 │     └─ SettingsView.swift         # §6
 ├─ Tests/KavasAINoteTakerTests/
 └─ docs/ARCHITECTURE.md
 ```
 
-**Araçlar:** XcodeGen (`project.yml` → `.xcodeproj`, tekrarlanabilir), Swift 6, SwiftUI,
-ScreenCaptureKit, AVFoundation, Swift Concurrency (async/await). Gizli veri: Keychain.
-Dağıtım: Xcode ile imzalı `.app` (ops. notarization).
+**Araçlar:** XcodeGen, Swift 6, SwiftUI, Core Audio (AudioToolbox/CoreAudio),
+AVFoundation, Swift Concurrency. Gizli veri: Keychain.
 
 ---
 
@@ -188,14 +193,14 @@ Dağıtım: Xcode ile imzalı `.app` (ops. notarization).
 
 ```
 ~/Documents/KavasAINoteTaker/meetings/
-└─ 2026-10-09_14-30_Toplanti/
-   ├─ system.caf            # ham sistem sesi
-   ├─ mic.caf               # ham mikrofon (varsa)
+└─ 2026-10-09_14-30_Zoom_Toplanti/
+   ├─ app.caf               # seçili uygulamanın ham sesi
+   ├─ mic.caf               # ham mikrofon
    ├─ mixed.wav             # 16 kHz mono, ASR'a giden
    ├─ transcript.json       # parçalar + metin + dil
    ├─ transcript.txt
    ├─ summary.md            # nihai, paylaşılabilir çıktı
-   └─ meta.json             # süre, model, endpoint, tarih
+   └─ meta.json             # süre, uygulama, model, endpoint, tarih
 ```
 
 ---
@@ -203,32 +208,21 @@ Dağıtım: Xcode ile imzalı `.app` (ops. notarization).
 ## 9. Fazlar (uygulama sırası)
 
 - **Faz 0 — İskelet:** XcodeGen `project.yml`, app + Settings scaffolding, entitlements/Info.plist,
-  boş SwiftUI penceresi; `xcodebuild` ile derlenir. *(onaydan sonra)*
-- **Faz 1 — Ses yakalama:** ScreenCaptureKit sistem sesi + mikrofon kaydı, WAV yazma,
-  izin kontrolü, basit kaydet/dur UI.
+  boş SwiftUI penceresi; `xcodebuild` ile derlenir.
+- **Faz 1 — Ses yakalama:** çalışan uygulama listesi + seçim; CATap ile per-process kayıt +
+  mikrofon kaydı; WAV yazma; izin UX'i; basit kaydet/dur UI.
 - **Faz 2 — ASR hattı:** OpenAI-uyumlu transkript istemcisi + chunking → `transcript.json`.
   Golden test: kısa Türkçe kayıt.
-- **Faz 3 — Özetleme:** LLM istemcisi + map-reduce özet → `summary.md`.
+- **Faz 3 — Özetleme:** deepseek-v4.1-flash istemcisi + map-reduce özet → `summary.md`.
 - **Faz 4 — Ayar & UX:** Settings (endpoint/token/model, Keychain, Test Et), toplantı listesi,
   detay görünümü, ilerleme/hatalar.
-- **Faz 5 — Realtime (ops.):** WebSocket/streaming ile canlı transkript.
-- **Faz 6 — Diarization & hedefleme (ops.):** konuşmacı ayrımı (mic/sistem kanalı doğal ayrım),
-  Core Audio process taps ile sadece toplantı uygulamasını yakalama.
+- **Faz 5 — Realtime (ops.):** streaming ile canlı transkript.
+- **Faz 6 — Diarization (ops.):** uygulama sesi vs mikrofon kanallarını kullanarak konuşmacı ayrımı.
 
 ---
 
-## 10. Açık Sorular
+## 10. Gizlilik / Uyarı
 
-1. **ASR endpoint'i hangisi olacak?** (a) kendi NVIDIA sunucunda `qwen-asr-serve`/vLLM,
-   (b) bir sağlayıcının OpenAI-uyumlu ucu, (c) DashScope `qwen3-asr-flash` (ayrı adapter gerekir).
-2. **Ses kaynağı:** sistem sesi / mikrofon / ikisi (önerilen: ikisi).
-3. **Özet LLM'i:** hangi model/endpoint?
-4. **Dağıtım:** sadece kendi Mac'inde mi, yoksa imzalı/notarized dağıtım da olacak mı?
-
----
-
-## 11. Gizlilik / Uyarı
-
-Toplantı kaydı ve transkript **kişisel veri** içerir (KVKK/GDPR). Ses bulut bir ASR'ye
-gidiyorsa üçüncü tarafa aktarılır. Kayıt öncesi katılımcı onayı ve saklama politikası
-netleştirilmeli. Bu, endpoint seçimini (self-host vs bulut) doğrudan etkiler.
+Toplantı kaydı ve transkript **kişisel veri** içerir (KVKK/GDPR). ASR ve özet **bulut
+uçlarına** gider (kullanıcının verdiği endpoint'ler). Kayıt öncesi katılımcı onayı ve
+saklama politikası netleştirilmeli.

@@ -5,27 +5,27 @@ Online toplantı ses kaydı → **Qwen3-ASR-1.7B** (API) ile transkript → **LL
 
 ## Nedir?
 
-Zoom / Google Meet / Microsoft Teams gibi online toplantılarda konuşulan sesi (sistem sesi +
-mikrofon) kaydeder, kaydı bir ASR API'sine göndererek yazıya döker ve yazıdan **kararlar +
-aksiyonlar + özet** içeren paylaşılabilir bir toplantı notu üretir.
+Bir online toplantıda **seçtiğin uygulamanın sesini** (ör. Zoom) ve **mikrofonu** kaydeder,
+kaydı bir ASR API'sine göndererek yazıya döker ve yazıdan **kararlar + aksiyonlar + özet**
+içeren paylaşılabilir bir toplantı notu üretir.
 
 ```
-Toplantı sesi → [kayıt: ScreenCaptureKit + mikrofon] → [Qwen3-ASR API] → transkript → [LLM] → toplantı özeti (md)
+[Seçili uygulama sesi + mikrofon] → [kayıt] → [Qwen3-ASR API] → transkript → [LLM] → özet (md)
 ```
 
 ## Stack
 
 - **Dil/UI:** Swift 6 + SwiftUI (native macOS)
-- **Ses yakalama:** ScreenCaptureKit (sistem sesi) + AVAudioEngine (mikrofon)
-- **ASR:** Qwen3-ASR-1.7B, OpenAI-uyumlu `/v1/audio/transcriptions` üzerinden
-- **Özet:** OpenAI-uyumlu `/v1/chat/completions`
+- **Ses yakalama:** Core Audio **process tap** (seçili uygulamanın sesi, macOS 14.2+) + **AVAudioEngine** (mikrofon)
+- **ASR:** **Qwen3-ASR-1.7B**, OpenAI-uyumlu `/v1/audio/transcriptions` üzerinden
+- **Özet:** **deepseek-v4.1-flash**, OpenAI-uyumlu `/v1/chat/completions` üzerinden
 - **Endpoint + API token:** uygulamanın **Ayarlar** menüsünden (token'lar Keychain'de)
 - **Proje üretimi:** XcodeGen (`project.yml` → `.xcodeproj`)
 
 ## Durum
 
 🚧 **Tasarım aşaması.** Bkz. [REQUIREMENTS.md](REQUIREMENTS.md) — gereksinim, mimari ve faz planı.
-Onay sonrası fazlar hâlinde kodlanacak.
+Onay sonrası fazlar hâlinde kodlanacak. Şimdilik yalnızca kendi Mac'te çalışacak.
 
 ## Lisans
 
