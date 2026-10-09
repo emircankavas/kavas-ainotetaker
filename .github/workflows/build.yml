@@ -30,5 +30,20 @@ jobs:
             -scheme KavasAINoteTaker \
             -configuration Debug \
             -destination 'platform=macOS' \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Package .app
+        run: |
+          APP="build/Build/Products/Debug/KavasAINoteTaker.app"
+          if [ ! -d "$APP" ]; then echo "App bundle not found at $APP"; exit 1; fi
+          ditto -c -k --sequesterRsrc --keepParent "$APP" KavasAINoteTaker.zip
+          ls -lh KavasAINoteTaker.zip
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KavasAINoteTaker-app
+          path: KavasAINoteTaker.zip
+          if-no-files-found: error
