@@ -58,11 +58,13 @@ enum UpdateService {
             throw UpdateError.notWritable(oldDir.path)
         }
 
-        // 5) Güncelleyici betiği yaz: uygulama kapanınca yenisini yerine koy ve aç.
+        // 5) Güncelleyici betiği: uygulama KAPANANA kadar bekle, sonra değiştir.
+        let pid = ProcessInfo.processInfo.processIdentifier
         let script = tmp.appendingPathComponent("apply.sh")
         let scriptBody = """
         #!/bin/bash
-        sleep 2
+        # Uygulama tamamen kapanana kadar bekle.
+        while kill -0 \(pid) 2>/dev/null; do sleep 0.3; done
         rm -rf "\(oldAppPath).old" 2>/dev/null
         mv "\(oldAppPath)" "\(oldAppPath).old" 2>/dev/null
         cp -R "\(newApp.path)" "\(oldAppPath)"
@@ -74,11 +76,13 @@ enum UpdateService {
         try scriptBody.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
 
-        AppLog.info("Güncelleme uygulanıyor, uygulama yeniden başlatılacak")
+        AppLog.info("Güncelleme uygulanıyor; uygulama kapanınca yeni sürüm başlatılacak")
         try runDetached("/bin/bash", [script.path])
 
-        // 6) Çık
-        DispatchQueue.main.async { NSApp.terminate(nil) }
+        // 6) Çık (AppKit üzerinden; NSApp global'ine bağımlı değil).
+        await MainActor.run {
+            NSApplication.shared.terminate(nil)
+        }
     }
 
     private static func run(_ launchPath: String, _ args: [String]) throws {

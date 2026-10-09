@@ -25,11 +25,14 @@ enum UpdateChecker {
     }
 
     static func check() async throws -> UpdateInfo? {
-        guard let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest") else {
+        // Önbellek-bozucu parametre: aynı sürümü eski yanıttan okumayalım.
+        let stamp = Int(Date().timeIntervalSince1970)
+        guard let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest?t=\(stamp)") else {
             return nil
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("KavasAINoteTaker", forHTTPHeaderField: "User-Agent")
 

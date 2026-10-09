@@ -10,8 +10,10 @@ final class UpdateState {
     func checkOnLaunch() {
         guard SettingsStore.checkUpdatesOnLaunch else { return }
         Task {
-            available = try? await UpdateChecker.check()
-            if let info = available, info.isNewer {
+            let result = try? await UpdateChecker.check()
+            // Yalnızca GERÇEKTEN daha yeni bir sürüm varsa rozeti göster.
+            available = (result?.isNewer == true) ? result : nil
+            if let info = available {
                 AppLog.info("Yeni sürüm mevcut: \(info.latestVersion)")
             }
         }

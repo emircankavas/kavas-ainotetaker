@@ -8,6 +8,9 @@ enum HTTP {
         config.timeoutIntervalForRequest = 600        // tek istek için 10 dk
         config.timeoutIntervalForResource = 3600      // toplam 1 saat
         config.waitsForConnectivity = true
+        // Önbelleği kapat: güncelleme kontrolü hep taze yanıt almalı.
+        config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        config.urlCache = nil
         return URLSession(configuration: config)
     }()
 
